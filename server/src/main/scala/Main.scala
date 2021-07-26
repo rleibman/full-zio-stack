@@ -1,9 +1,7 @@
 /*
- * Copyright (c) 2019 Roberto Leibman -- All Rights Reserved
+ * Copyright 2021 Roberto Leibman
  *
- *  Unauthorized copying of this file, via any medium is strictly prohibited
- *  Proprietary and confidential
- *
+ * SPDX-License-Identifier: MIT
  */
 
 import zhttp.http._
