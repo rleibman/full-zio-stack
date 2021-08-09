@@ -23,7 +23,7 @@ lazy val licenseSettings = Seq(
   headerLicense := Some(HeaderLicense.MIT("2021", "Roberto Leibman", HeaderLicenseStyle.SpdxSyntax))
 )
 
-lazy val zioVersion = "1.0.9"
+lazy val zioVersion = "1.0.10"
 
 lazy val commonSettings: Project => Project =
   _.enablePlugins(AutomateHeaderPlugin, GitVersioning, BuildInfoPlugin)
@@ -76,7 +76,7 @@ lazy val shared = crossProject(JSPlatform, JVMPlatform)
 // Server
 
 val doobieVersion = "1.0.0-M5"
-val quillVersion = "3.8.0"
+val quillVersion = "3.7.2.Beta1.4"
 val zioConfigVersion = "1.0.6"
 
 lazy val server = project
@@ -86,9 +86,9 @@ lazy val server = project
     libraryDependencies ++= Seq(
       "io.d11"       %% "zhttp"                 % "1.0.0.0-RC17" withSources (),
       "dev.zio"      %% "zio-json"              % "0.2.0-M1" withSources (),
-      "dev.zio"      %% "zio-config"            % zioConfigVersion withSources(),
+//      "dev.zio"      %% "zio-config"            % zioConfigVersion withSources(),
 //      "dev.zio"      %% "zio-config-magnolia"   % zioConfigVersion withSources(),
-      "dev.zio"      %% "zio-config-typesafe"   % zioConfigVersion withSources(),
+//      "dev.zio"      %% "zio-config-typesafe"   % zioConfigVersion withSources(),
 //      "io.getquill"  %% "quill-jdbc"            % quillVersion withSources(),
 //      "io.getquill"  %% "quill-jdbc-zio"        % quillVersion withSources(),
       "org.tpolecat" %% "doobie-core"           % doobieVersion withSources (),
@@ -195,6 +195,7 @@ lazy val client = project
     /* disabled because it somehow triggers many warnings */
     scalaJSLinkerConfig := scalaJSLinkerConfig.value.withSourceMap(false),
     libraryDependencies ++= Seq(
+      "com.olvind"                        %%% "scalablytyped-runtime"    % "2.4.2" withSources(),
       "com.github.japgolly.scalajs-react" %%% "core-ext-cats"            % scalajsReactVersion withSources (),
       "com.github.japgolly.scalajs-react" %%% "core"                     % scalajsReactVersion withSources (),
       "com.github.japgolly.scalajs-react" %%% "extra"                    % scalajsReactVersion withSources (),

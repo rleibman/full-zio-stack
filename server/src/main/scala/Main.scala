@@ -18,6 +18,7 @@ object Main extends zio.App {
     HttpData.fromStream {
       ZStream.fromFile(JPaths.get(s"$rootDir$fileName"))
     }
+
   val app = Http.collect[Request] {
     case Method.GET -> Root                 => Response.http(content = file("index.html"))
     case Method.GET -> Root / "text"        => Response.text("Hello World!")
