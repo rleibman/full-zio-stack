@@ -20,9 +20,9 @@ object Main extends zio.App {
     }
 
   val app = Http.collect[Request] {
-    case Method.GET -> Root                 => Response.http(content = file("index.html"))
-    case Method.GET -> Root / "text"        => Response.text("Hello World!")
-    case Method.GET -> Root / somethingElse => Response.http(content = file(somethingElse))
+    case Method.GET -> !!                 => Response(data = file("index.html"))
+    case Method.GET -> !! / "text"        => Response.text("Hello World!")
+    case Method.GET -> !! / somethingElse => Response(data = file(somethingElse))
   }
 
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = Server.start(port, app).exitCode
