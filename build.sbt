@@ -25,25 +25,28 @@ lazy val licenseSettings = Seq(
 
 lazy val zioVersion = "1.0.13"
 
+lazy val scala3Opts = Seq(
+  "-no-indent", //scala3
+  "-old-syntax", //scala3
+  "-encoding",
+  "utf-8", // Specify character encoding used by source files.
+  "-feature", // Emit warning and location for usages of features that should be imported explicitly.
+  "-language:existentials", // Existential types (besides wildcard types) can be written and inferred
+  "-language:implicitConversions",
+  "-language:higherKinds", // Allow higher-kinded types
+  "-unchecked", // Enable additional warnings where generated code depends on assumptions.
+  "-Xfatal-warnings", // Fail the compilation if there are any warnings.
+  "-deprecation", // Emit warning and location for usages of deprecated APIs.
+  "-explain-types", // Explain type errors in more detail.
+  "-Yexplicit-nulls", //Make reference types non-nullable. Nullable types can be expressed with unions: e.g. String|Null.
+)
+
 lazy val commonSettings: Project => Project =
   _.enablePlugins(AutomateHeaderPlugin, GitVersioning, BuildInfoPlugin)
     .settings(buildInfoSettings, gitSettings, licenseSettings)
     .settings(
       scalaVersion := "3.1.0",
-      scalacOptions ++= Seq(
-        "-no-indent", //scala3
-        "-old-syntax", //scala3
-        "-encoding",
-        "UTF-8",
-        "-Xtarget:11",
-        "-Xfatal-warnings",
-        "-explain-types",
-        "-deprecation",
-        "-feature",
-        "-unchecked",
-        "-language:implicitConversions"
-        //        "-Yexplicit-nulls", //Make reference types non-nullable. Nullable types can be expressed with unions: e.g. String|Null.
-      ),
+      scalacOptions ++= scala3Opts,
       libraryDependencies ++= Seq(
         //ZIO
         "dev.zio" %% "zio" % zioVersion withSources(),

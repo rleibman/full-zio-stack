@@ -4,11 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import zhttp.http._
-import zhttp.service._
-import zio._
-import zio.stream._
-import java.nio.file.{Paths => JPaths}
+import zhttp.http.*
+import zhttp.service.*
+import zio.*
+import zio.stream.*
+
+import java.nio.file
+import java.nio.file.Paths as JPaths
 
 object Main extends zio.App {
   val rootDir = "/Volumes/Personal/projects/full-zio-stack/dist/"
@@ -16,7 +18,10 @@ object Main extends zio.App {
 
   def file(fileName: String) =
     HttpData.fromStream {
-      ZStream.fromFile(JPaths.get(s"$rootDir$fileName"))
+      JPaths.get(s"$rootDir$fileName") match {
+        case path: java.nio.file.Path => ZStream.fromFile(path)
+        case null => throw new NullPointerException()
+      }
     }
 
   val app = Http.collect[Request] {
