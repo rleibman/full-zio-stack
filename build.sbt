@@ -178,30 +178,30 @@ lazy val withCssLoading: Project => Project =
     )
   )
 
-//lazy val stLib = project
-//  .in(file("full-zio-stack-stLib"))
-//  .enablePlugins(ScalablyTypedConverterGenSourcePlugin)
-//  .configure(reactNpmDeps)
-//  .settings(
-//    name                     := "full-zio-stack-stLib",
-//    scalaVersion             := "2.13.6",
-//    useYarn                  := true,
-//    stOutputPackage          := "net.leibman.fullziostack",
-//    stFlavour                := Flavour.Japgolly,
-//    stReactEnableTreeShaking := Selection.All,
-//    Compile / npmDependencies ++= Seq(
-//      "semantic-ui-react" -> "2.0.3"
-//    ),
-//    scalaJSUseMainModuleInitializer := true,
-//    /* disabled because it somehow triggers many warnings */
-//    scalaJSLinkerConfig ~= (_.withSourceMap(false)),
-//    libraryDependencies ++= Seq(
-//      "com.github.japgolly.scalajs-react" %%% "core-ext-cats"            % scalajsReactVersion withSources (),
-//      "com.github.japgolly.scalajs-react" %%% "core"                     % scalajsReactVersion withSources (),
-//      "com.github.japgolly.scalajs-react" %%% "extra"                    % scalajsReactVersion withSources (),
-//      "com.github.japgolly.scalajs-react" %%% "callback-ext-cats_effect" % scalajsReactVersion withSources ()
-//    )
-//  )
+lazy val stLib = project
+  .in(file("full-zio-stack-stLib"))
+  .enablePlugins(ScalablyTypedConverterGenSourcePlugin)
+  .configure(reactNpmDeps)
+  .settings(
+    name                     := "full-zio-stack-stLib",
+    scalaVersion             := "2.13.6",
+    useYarn                  := true,
+    stOutputPackage          := "net.leibman.fullziostack",
+    stFlavour                := Flavour.ScalajsReact,
+    stReactEnableTreeShaking := Selection.All,
+    Compile / npmDependencies ++= Seq(
+      "semantic-ui-react" -> "2.0.3"
+    ),
+    scalaJSUseMainModuleInitializer := true,
+    /* disabled because it somehow triggers many warnings */
+    scalaJSLinkerConfig ~= (_.withSourceMap(false)),
+    libraryDependencies ++= Seq(
+      "com.github.japgolly.scalajs-react" %%% "core-ext-cats"            % scalajsReactVersion withSources (),
+      "com.github.japgolly.scalajs-react" %%% "core"                     % scalajsReactVersion withSources (),
+      "com.github.japgolly.scalajs-react" %%% "extra"                    % scalajsReactVersion withSources (),
+      "com.github.japgolly.scalajs-react" %%% "callback-ext-cats_effect" % scalajsReactVersion withSources ()
+    )
+  )
 //
 //lazy val client = project
 //  .enablePlugins(ScalaJSPlugin, ScalaJSBundlerPlugin)
@@ -260,7 +260,7 @@ lazy val withCssLoading: Project => Project =
 // Root project
 lazy val root = project
   .in(file("."))
-  .aggregate(sharedJS, sharedJVM, server, util, db)
+  .aggregate(sharedJS, sharedJVM, server, util, db, stLib)
   .settings(
     name := "full-zio-stack",
     publish := {},
