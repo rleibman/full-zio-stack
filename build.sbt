@@ -55,7 +55,6 @@ lazy val commonSettings: Project => Project =
         //Test
         "dev.zio" %% "zio-test" % zioVersion % "test" withSources(),
         "dev.zio" %% "zio-test-sbt" % zioVersion % "test" withSources()
-        //        "dev.zio" %% "zio-test-magnolia" % zioVersion % "test" withSources(), // optional
       )
     )
 
@@ -81,7 +80,7 @@ lazy val shared = crossProject(JSPlatform, JVMPlatform)
 
 val zioConfigVersion = "1.0.10"
 
-val quillVersion = "3.10.0.Beta1.6"
+val quillVersion = "3.12.0.Beta1.7"
 
 lazy val db = project
   .configure(commonSettings)
@@ -90,16 +89,24 @@ lazy val db = project
     libraryDependencies ++= Seq(
       "dev.zio" %% "zio-config-typesafe" % zioConfigVersion withSources(),
       "io.getquill" %% "quill-jdbc" % quillVersion withSources() excludeAll (
-        ExclusionRule(organization = "org.scala-lang.modules")
+        ExclusionRule("org.scala-lang.modules", "scala-collection-compat_2.13"),
+          ExclusionRule("com.lihaoyi", "sourcecode_2.13"),
+          ExclusionRule("com.lihaoyi", "fansi_2.13"),
+          ExclusionRule("com.lihaoyi", "pprint_2.13"),
         ),
       "io.getquill" %% "quill-jdbc-zio" % quillVersion withSources() excludeAll (
-        ExclusionRule(organization = "org.scala-lang.modules")
-        ),
+        ExclusionRule("org.scala-lang.modules", "scala-collection-compat_2.13"),
+        ExclusionRule("com.lihaoyi", "sourcecode_2.13"),
+        ExclusionRule("com.lihaoyi", "fansi_2.13"),
+        ExclusionRule("com.lihaoyi", "pprint_2.13"),
+      ),
       "io.getquill" %% "quill-jasync-postgres" % quillVersion withSources() excludeAll (
-        ExclusionRule(organization = "org.scala-lang.modules")
-        ),
-      "mysql" % "mysql-connector-java" % "8.0.27" withSources(),
-      "com.dimafeng" %% "testcontainers-scala-scalatest" % "0.39.12" % Test
+        ExclusionRule("org.scala-lang.modules", "scala-collection-compat_2.13"),
+        ExclusionRule("com.lihaoyi", "sourcecode_2.13"),
+        ExclusionRule("com.lihaoyi", "fansi_2.13"),
+        ExclusionRule("com.lihaoyi", "pprint_2.13"),
+      ),
+      "mysql" % "mysql-connector-java" % "8.0.27" withSources()
     )
   )
 
@@ -108,22 +115,11 @@ lazy val server = project
   .dependsOn(sharedJVM, db)
   .settings(
     libraryDependencies ++= Seq(
-      "io.d11" %% "zhttp" % "1.0.0.0-RC18" withSources(),
-      "dev.zio" %% "zio-json" % "0.2.0-M3" withSources(),
+      "io.d11" %% "zhttp" % "1.0.0.0-RC21" withSources(),
+      "dev.zio" %% "zio-json" % "0.3.0-RC1-1" withSources(),
       "dev.zio" %% "zio-config" % zioConfigVersion withSources(),
       "dev.zio" %% "zio-config-magnolia" % zioConfigVersion withSources(),
       "dev.zio" %% "zio-config-typesafe" % zioConfigVersion withSources(),
-      "io.getquill" %% "quill-jdbc" % quillVersion withSources() excludeAll (
-        ExclusionRule(organization = "org.scala-lang.modules")
-        ),
-      "io.getquill" %% "quill-jdbc-zio" % quillVersion withSources() excludeAll (
-        ExclusionRule(organization = "org.scala-lang.modules")
-        ),
-      "io.getquill" %% "quill-jasync-postgres" % quillVersion withSources() excludeAll (
-        ExclusionRule(organization = "org.scala-lang.modules")
-        ),
-      "mysql" % "mysql-connector-java" % "8.0.27" withSources(),
-      "com.dimafeng" %% "testcontainers-scala-scalatest" % "0.39.12" % Test
     )
   )
 
@@ -148,40 +144,40 @@ lazy val start = TaskKey[Unit]("start")
  */
 lazy val dist = TaskKey[File]("dist")
 
-//val scalajsReactVersion = "2.0.0"
-//
-//// specify versions for all of reacts dependencies to compile less since we have many demos here
-//lazy val reactNpmDeps: Project => Project =
-//  _.settings(
-//    Compile / npmDependencies ++= Seq(
-//      "react"             -> "16.13.1",
-//      "react-dom"         -> "16.13.1",
-//      "@types/react"      -> "16.9.42",
-//      "@types/react-dom"  -> "16.9.8",
-//      "csstype"           -> "2.6.11",
-//      "@types/prop-types" -> "15.7.3"
-//    )
-//  )
-//
-//lazy val bundlerSettings: Project => Project =
-//  _.settings(
-//    Compile / fastOptJS / webpackDevServerExtraArgs += "--mode=development",
-//    Compile / fullOptJS / webpackDevServerExtraArgs += "--mode=production"
-//  )
-//
-//lazy val withCssLoading: Project => Project =
-//  _.settings(
-//    /* custom webpack file to include css */
-//    webpackConfigFile := Some((ThisBuild / baseDirectory).value / "client" / "custom.webpack.config.js"),
-//    Compile / npmDevDependencies ++= Seq(
-//      "webpack-merge" -> "4.2.2",
-//      "css-loader"    -> "3.4.2",
-//      "style-loader"  -> "1.1.3",
-//      "file-loader"   -> "5.1.0",
-//      "url-loader"    -> "4.1.0"
-//    )
-//  )
-//
+val scalajsReactVersion = "2.0.0"
+
+// specify versions for all of reacts dependencies to compile less since we have many demos here
+lazy val reactNpmDeps: Project => Project =
+  _.settings(
+    Compile / npmDependencies ++= Seq(
+      "react"             -> "16.13.1",
+      "react-dom"         -> "16.13.1",
+      "@types/react"      -> "16.9.42",
+      "@types/react-dom"  -> "16.9.8",
+      "csstype"           -> "2.6.11",
+      "@types/prop-types" -> "15.7.3"
+    )
+  )
+
+lazy val bundlerSettings: Project => Project =
+  _.settings(
+    Compile / fastOptJS / webpackDevServerExtraArgs += "--mode=development",
+    Compile / fullOptJS / webpackDevServerExtraArgs += "--mode=production"
+  )
+
+lazy val withCssLoading: Project => Project =
+  _.settings(
+    /* custom webpack file to include css */
+    webpackConfigFile := Some((ThisBuild / baseDirectory).value / "client" / "custom.webpack.config.js"),
+    Compile / npmDevDependencies ++= Seq(
+      "webpack-merge" -> "4.2.2",
+      "css-loader"    -> "3.4.2",
+      "style-loader"  -> "1.1.3",
+      "file-loader"   -> "5.1.0",
+      "url-loader"    -> "4.1.0"
+    )
+  )
+
 //lazy val stLib = project
 //  .in(file("full-zio-stack-stLib"))
 //  .enablePlugins(ScalablyTypedConverterGenSourcePlugin)

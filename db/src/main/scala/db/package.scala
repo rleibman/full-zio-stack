@@ -10,7 +10,6 @@ import model.*
 import zio.*
 import zio.console.putStrLn
 
-import java.io.Closeable
 import java.sql.SQLException
 import javax.sql.DataSource
 
@@ -21,7 +20,7 @@ package object db {
   given MappedEncoding[String, ModelObjectType](ModelObjectType.valueOf)
 
   object QuillContext extends MysqlZioJdbcContext(SnakeCase) {
-    val dataSourceLayer: ULayer[Has[DataSource & Closeable]] =
+    val dataSourceLayer: ULayer[Has[DataSource]] =
       DataSourceLayer.fromPrefix("database").orDie
   }
 
@@ -35,9 +34,9 @@ package object db {
 
   import QuillContext.*
 
-  final case class DataServiceLive(dataSource: DataSource & Closeable) extends DataService {
-    val env: Has[DataSource & Closeable] = Has(dataSource)
+  final case class DataServiceLive(dataSource: DataSource) extends DataService {
+    val env: Has[DataSource] = Has(dataSource)
 
-    override def getModelObjects: IO[SQLException, List[ModelObject]] = run(query[ModelObject]).onDataSource.provide(env)
+    override def getModelObjects: IO[SQLException, List[ModelObject]] = run(query[ModelObject]).provide(env)
   }
 }
