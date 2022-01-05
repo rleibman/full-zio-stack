@@ -15,49 +15,53 @@ import java.time.LocalDateTime
 import javax.sql.DataSource
 
 package object db {
-  given MappedEncoding [ModelObjectId, Int] (_.asInt)
-  given MappedEncoding [Int, ModelObjectId] (ModelObjectId.apply)
-  given MappedEncoding [ModelObjectType, String] (_.toString)
-  given MappedEncoding [String, ModelObjectType] (ModelObjectType.valueOf)
-
   object QuillContext extends MysqlZioJdbcContext(SnakeCase) {
     val dataSourceLayer: ULayer[Has[DataSource]] =
       DataSourceLayer.fromPrefix("database").orDie
   }
 
-  trait DataService {
-    def all: IO[SQLException, List[ModelObject]]
-    def get(modelObjectId:    ModelObjectId): IO[SQLException, Option[ModelObject]]
-    def delete(modelObjectId: ModelObjectId, softDelete: Boolean): IO[SQLException, Boolean]
-    def upsert(modelObject:   ModelObject):   IO[SQLException, ModelObject]
-
-    def delete(modelObject: ModelObject, softDelete: Boolean): IO[SQLException, Boolean] = delete(modelObject.id, softDelete)
+  trait DataService[PK, TYPE] {
+    def all: IO[SQLException, List[TYPE]]
+    def get(id: PK): IO[SQLException, Option[TYPE]]
+    def delete(
+      id:         PK,
+      softDelete: Boolean
+    ): IO[SQLException, Boolean]
+    def upsert(obj: TYPE): IO[SQLException, TYPE]
   }
 
   object DataService {
-    val live: URLayer[Has[DataSource], Has[DataService]] = (DataServiceLive.apply _).toLayer[DataService]
+    val modelObjectDataServiceLive: URLayer[Has[DataSource], Has[DataService[ModelObjectId, ModelObject]]] =
+      (ModelObjectDataService.apply _).toLayer[DataService[ModelObjectId, ModelObject]]
   }
 
   import QuillContext.*
 
-  final case class DataServiceLive(dataSource: DataSource) extends DataService {
+  final case class ModelObjectDataService(dataSource: DataSource) extends DataService[ModelObjectId, ModelObject] {
     val env: Has[DataSource] = Has(dataSource)
+    given MappedEncoding [ModelObjectId, Int] (_.asInt)
+    given MappedEncoding [Int, ModelObjectId] (ModelObjectId.apply)
+    given MappedEncoding [ModelObjectType, String] (_.toString)
+    given MappedEncoding [String, ModelObjectType] (ModelObjectType.valueOf)
+
 
     override def all: IO[SQLException, List[ModelObject]] = run(query[ModelObject]).provide(env)
     override def get(id: ModelObjectId): IO[SQLException, Option[ModelObject]] =
       run(quote(query[ModelObject].filter(_.id == lift(id)))).provide(env).map(_.headOption)
-    override def delete(id: ModelObjectId, softDelete: Boolean): IO[SQLException, Boolean] = {
-      if(softDelete) {
+    override def delete(
+      id:         ModelObjectId,
+      softDelete: Boolean
+    ): IO[SQLException, Boolean] = {
+      if (softDelete) {
         run(quote {
           query[ModelObject]
             .filter(_.id == lift(id))
             .update(
-              _.deleted         -> true,
-              _.lastUpdated     -> lift(LocalDateTime.now.asInstanceOf[LocalDateTime]),
+              _.deleted     -> true,
+              _.lastUpdated -> lift(LocalDateTime.now.asInstanceOf[LocalDateTime])
             )
         }).provide(env).map(_ > 0) //TODO need to return the newly inserted object id.
-      }
-      else {
+      } else {
         run(quote(query[ModelObject].filter(_.id == lift(id)).delete)).provide(env).map(_ > 0)
       }
     }
