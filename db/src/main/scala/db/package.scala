@@ -28,10 +28,10 @@ package object db {
   trait DataService {
     def all: IO[SQLException, List[ModelObject]]
     def get(modelObjectId:    ModelObjectId): IO[SQLException, Option[ModelObject]]
-    def delete(modelObjectId: ModelObjectId): IO[SQLException, Boolean]
+    def delete(modelObjectId: ModelObjectId, softDelete: Boolean): IO[SQLException, Boolean]
     def upsert(modelObject:   ModelObject):   IO[SQLException, ModelObject]
 
-    def delete(modelObject: ModelObject): IO[SQLException, Boolean] = delete(modelObject.id)
+    def delete(modelObject: ModelObject, softDelete: Boolean): IO[SQLException, Boolean] = delete(modelObject.id, softDelete)
   }
 
   object DataService {
@@ -46,16 +46,28 @@ package object db {
     override def all: IO[SQLException, List[ModelObject]] = run(query[ModelObject]).provide(env)
     override def get(id: ModelObjectId): IO[SQLException, Option[ModelObject]] =
       run(quote(query[ModelObject].filter(_.id == lift(id)))).provide(env).map(_.headOption)
-    override def delete(id: ModelObjectId): IO[SQLException, Boolean] = {
-      run(quote(query[ModelObject].filter(_.id == lift(id)).delete)).provide(env).map(_ > 0)
+    override def delete(id: ModelObjectId, softDelete: Boolean): IO[SQLException, Boolean] = {
+      if(softDelete) {
+        run(quote {
+          query[ModelObject]
+            .filter(_.id == lift(id))
+            .update(
+              _.deleted         -> true,
+              _.lastUpdated     -> lift(LocalDateTime.now.asInstanceOf[LocalDateTime]),
+            )
+        }).provide(env).map(_ > 0) //TODO need to return the newly inserted object id.
+      }
+      else {
+        run(quote(query[ModelObject].filter(_.id == lift(id)).delete)).provide(env).map(_ > 0)
+      }
     }
     override def upsert(modelObject: ModelObject): IO[SQLException, ModelObject] = {
       if (modelObject.id == ModelObjectId.empty) {
         run(quote {
           query[ModelObject]
             .insert(
-              _.name            -> modelObject.name,
-              _.description     -> modelObject.description,
+              _.name            -> lift(modelObject.name),
+              _.description     -> lift(modelObject.description),
               _.deleted         -> false,
               _.created         -> lift(LocalDateTime.now.asInstanceOf[LocalDateTime]),
               _.lastUpdated     -> lift(LocalDateTime.now.asInstanceOf[LocalDateTime]),
@@ -68,8 +80,8 @@ package object db {
           query[ModelObject]
             .filter(_.id == lift(modelObject.id))
             .update(
-              _.name            -> modelObject.name,
-              _.description     -> modelObject.description,
+              _.name            -> lift(modelObject.name),
+              _.description     -> lift(modelObject.description),
               _.deleted         -> false,
               _.lastUpdated     -> lift(LocalDateTime.now.asInstanceOf[LocalDateTime]),
               _.modelObjectType -> lift(modelObject.modelObjectType)
