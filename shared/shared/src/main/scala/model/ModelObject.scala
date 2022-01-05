@@ -18,10 +18,11 @@ opaque type ModelObjectId = Int
 
 object ModelObjectId {
   def apply(value: Int): ModelObjectId = value
+  lazy val empty: ModelObjectId = ModelObjectId(-1)
 }
 
 extension (id: ModelObjectId) {
-  def toInt: Int = id
+  def asInt: Int = id
 }
 
 case class ModelObject(
