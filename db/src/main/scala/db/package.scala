@@ -14,6 +14,8 @@ import java.sql.SQLException
 import java.time.LocalDateTime
 import javax.sql.DataSource
 
+//TODO Figure out streaming
+//
 package object db {
   object QuillContext extends MysqlZioJdbcContext(SnakeCase) {
     val dataSourceLayer: ULayer[Has[DataSource]] =
@@ -43,7 +45,6 @@ package object db {
     given MappedEncoding [Int, ModelObjectId] (ModelObjectId.apply)
     given MappedEncoding [ModelObjectType, String] (_.toString)
     given MappedEncoding [String, ModelObjectType] (ModelObjectType.valueOf)
-
 
     override def all: IO[SQLException, List[ModelObject]] = run(query[ModelObject]).provide(env)
     override def get(id: ModelObjectId): IO[SQLException, Option[ModelObject]] =

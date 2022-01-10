@@ -1,0 +1,5 @@
+-J-Xmx4G
+-J-Xms3G
+-J-Xss2M
+-J-XX:MaxMetaspaceSize=2048M
+-Dpackaging.type=jar

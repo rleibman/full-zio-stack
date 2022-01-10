@@ -116,7 +116,7 @@ lazy val server = project
   .settings(
     libraryDependencies ++= Seq(
       "io.d11" %% "zhttp" % "1.0.0.0-RC21" withSources(),
-      "dev.zio" %% "zio-json" % "0.3.0-RC1-1" withSources(),
+      "dev.zio" %% "zio-json" % "0.2.0-M3" withSources(), //NOte, starting 0.3.0 it brings in zio 2.0.0
       "dev.zio" %% "zio-config" % zioConfigVersion withSources(),
       "dev.zio" %% "zio-config-magnolia" % zioConfigVersion withSources(),
       "dev.zio" %% "zio-config-typesafe" % zioConfigVersion withSources(),

@@ -16,7 +16,9 @@ object Main extends zio.App {
   val rootDir = "/Volumes/Personal/projects/full-zio-stack/dist/"
   val port = 8090
 
-  def file(fileName: String) =
+  type Environment = ZEnv
+
+  def file(fileName: String): HttpData[Environment, Throwable] =
     HttpData.fromStream {
       JPaths.get(s"$rootDir$fileName") match {
         case path: java.nio.file.Path => ZStream.fromFile(path)
@@ -24,11 +26,11 @@ object Main extends zio.App {
       }
     }
 
-  val app = Http.collect[Request] {
+  val app: HttpApp[Environment, Throwable] = Http.collect[Request] {
     case Method.GET -> !!                 => Response(data = file("index.html"))
     case Method.GET -> !! / "text"        => Response.text("Hello World!")
     case Method.GET -> !! / somethingElse => Response(data = file(somethingElse))
   }
 
-  override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = Server.start(port, app).exitCode
+  override def run(args: List[String]): URIO[Environment, ExitCode] = Server.start(port, app).exitCode
 }
