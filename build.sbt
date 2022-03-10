@@ -203,7 +203,7 @@ lazy val stLib = project
 
 lazy val client = project
   .enablePlugins(ScalaJSPlugin, ScalaJSBundlerPlugin)
-  .dependsOn(modelJS)
+  .dependsOn(modelJS, stLib)
   .configure(commonSettings, reactNpmDeps, bundlerSettings, withCssLoading)
   .settings(
     name                            := "full-zio-stack-client",
