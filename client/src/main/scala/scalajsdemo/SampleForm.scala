@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-package scalajdemo
+package scalajsdemo
 
 import japgolly.scalajs.react._
 import japgolly.scalajs.react.component.Scala.Unmounted
 import japgolly.scalajs.react.vdom.html_<^._
-import org.scalajs.dom.raw.HTMLElement
-//import typings.semanticUiReact.components._
+import org.scalajs.dom.HTMLElement
+//import net.leibman.fullziostack.semanticUiReact.components.*
 
 object SampleForm {
   case class Props(name: String)
@@ -24,13 +24,13 @@ object SampleForm {
     def render(
       props: Props,
       state: State
-    ): VdomTagOf[HTMLElement] = <.div()
+    ) = s"${state.name}"
 //      Modal.open(state.dlg)(
 //        ModalHeader("Results"),
 //        ModalContent(s"The name is ${state.name}"),
 //        ModalActions(
 //          Button.onClick((_, _) => $.modState(_.copy(dlg = false)))("Close")
-//        )),
+//        ))
 //      Form(
 //        FormField(
 //          Label("First Name"),
