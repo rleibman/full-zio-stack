@@ -8,12 +8,12 @@ One of the most difficult thing in our field is to be able to choose a set of te
 
 ### ZIO Based
 
-zio-http
-zio-config
-zio-logging
-zio-test
-zio-json
-quill
+#### zio-http
+#### zio-config
+#### zio-logging
+#### zio-test
+#### zio-json
+#### quill
 
 ### Non-ZIO tech
 #### scala.js (https://www.scala-js.org/)
