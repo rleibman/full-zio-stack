@@ -10,27 +10,27 @@ import japgolly.scalajs.react._
 import japgolly.scalajs.react.component.Scala.Unmounted
 import japgolly.scalajs.react.vdom.html_<^._
 import org.scalajs.dom.HTMLElement
-//import net.leibman.fullziostack.semanticUiReact.components.*
+import net.leibman.fullziostack.semanticUiReact.components.*
 
 object SampleForm {
   case class Props(name: String)
 
   case class State(
     name: String,
-    dlg:  Boolean = false
+    dlg:  Boolean = true
   )
 
   class Backend($ : BackendScope[Props, State]) {
     def render(
       props: Props,
       state: State
-    ) = s"${state.name}"
-//      Modal.open(state.dlg)(
-//        ModalHeader("Results"),
-//        ModalContent(s"The name is ${state.name}"),
-//        ModalActions(
-//          Button.onClick((_, _) => $.modState(_.copy(dlg = false)))("Close")
-//        ))
+    ): VdomElement =
+      Modal.open(state.dlg)(
+        ModalHeader("Results"),
+        ModalContent(s"The name is ${state.name}"),
+        ModalActions(
+          Button.onClick((_, _) => $.modState(_.copy(dlg = false)))("Close")
+        ))
 //      Form(
 //        FormField(
 //          Label("First Name"),

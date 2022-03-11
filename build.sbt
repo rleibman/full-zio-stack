@@ -183,7 +183,7 @@ lazy val stLib = project
   .configure(reactNpmDeps)
   .settings(
     name                     := "full-zio-stack-stLib",
-    scalaVersion             := "2.13.6",
+    scalaVersion := "3.1.0",
     useYarn                  := true,
     stOutputPackage          := "net.leibman.fullziostack",
     stFlavour                := Flavour.ScalajsReact,
@@ -214,13 +214,14 @@ lazy val client = project
     scalaJSLinkerConfig := scalaJSLinkerConfig.value.withSourceMap(false),
     libraryDependencies ++= Seq(
       "dev.zio" %%% "zio"                                                % zioVersion withSources (),
-      "io.github.cquiroz" %%% "scala-java-time"                          % "2.3.0" withSources (),
-      "io.github.cquiroz" %%% "scala-java-time-tzdb"                     % "2.3.0" withSources (),
-      "com.olvind" %%% "scalablytyped-runtime"                           % "2.4.2" withSources (),
-      "com.github.japgolly.scalajs-react" %%% "core-ext-cats"            % scalajsReactVersion withSources (),
-      "com.github.japgolly.scalajs-react" %%% "core"                     % scalajsReactVersion withSources (),
-      "com.github.japgolly.scalajs-react" %%% "extra"                    % scalajsReactVersion withSources (),
-      "com.github.japgolly.scalajs-react" %%% "callback-ext-cats_effect" % scalajsReactVersion withSources ()
+      ("io.github.cquiroz" %%% "scala-java-time"                          % "2.3.0" withSources ()),
+      ("io.github.cquiroz" %%% "scala-java-time-tzdb"                     % "2.3.0" withSources ()),
+      ("com.olvind" %%% "scalablytyped-runtime"                           % "2.4.2" withSources ()),
+      ("com.github.japgolly.scalajs-react" %%% "core-ext-cats"            % scalajsReactVersion withSources ()),
+      ("com.github.japgolly.scalajs-react" %%% "core"                     % scalajsReactVersion withSources ()),
+      ("com.github.japgolly.scalajs-react" %%% "extra"                    % scalajsReactVersion withSources ()),
+      ("com.github.japgolly.scalajs-react" %%% "callback-ext-cats_effect" % scalajsReactVersion withSources ()),
+      ("org.scala-js" %%% "scalajs-dom"                              % "2.1.0")
     ),
     start := {
       (Compile / fastOptJS / startWebpackDevServer).value
