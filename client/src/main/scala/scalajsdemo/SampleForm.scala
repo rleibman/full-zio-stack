@@ -27,10 +27,10 @@ object SampleForm {
     ): VdomElement =
       Modal.open(state.dlg)(
         ModalHeader("Results"),
-        ModalContent(s"The name is ${state.name}"),
+        ModalContent(s"The name is ${state.name}",
         ModalActions(
           Button.onClick((_, _) => $.modState(_.copy(dlg = false)))("Close")
-        ))
+        )))
 //      Form(
 //        FormField(
 //          Label("First Name"),

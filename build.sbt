@@ -39,11 +39,11 @@ lazy val scala3Opts = Seq(
   "-Yexplicit-nulls" // Make reference types non-nullable. Nullable types can be expressed with unions: e.g. String|Null.
 )
 
-val zioVersion = "2.0.0-RC2"
+val zioVersion = "2.0.0-RC3"
 val zioHttpVersion = "2.0.0-RC4"
-val zioConfigVersion = "3.0.0-RC2"
+val zioConfigVersion = "3.0.0-RC6"
 val zioLoggingVersion = "2.0.0-RC5"
-val zioJsonVersion = "0.3.0-RC3"
+val zioJsonVersion = "0.3.0-RC4"
 
 lazy val commonSettings: Project => Project =
   _.enablePlugins(AutomateHeaderPlugin, GitVersioning, BuildInfoPlugin)
@@ -217,10 +217,9 @@ lazy val client = project
       ("io.github.cquiroz" %%% "scala-java-time"                          % "2.3.0" withSources ()),
       ("io.github.cquiroz" %%% "scala-java-time-tzdb"                     % "2.3.0" withSources ()),
       ("com.olvind" %%% "scalablytyped-runtime"                           % "2.4.2" withSources ()),
-      ("com.github.japgolly.scalajs-react" %%% "core-ext-cats"            % scalajsReactVersion withSources ()),
-      ("com.github.japgolly.scalajs-react" %%% "core"                     % scalajsReactVersion withSources ()),
+      ("com.github.japgolly.scalajs-react" %%% "core-generic"                     % scalajsReactVersion withSources ()),
+      ("com.github.japgolly.scalajs-react" %%% "util-dummy-defaults") % scalajsReactVersion % Provided,
       ("com.github.japgolly.scalajs-react" %%% "extra"                    % scalajsReactVersion withSources ()),
-      ("com.github.japgolly.scalajs-react" %%% "callback-ext-cats_effect" % scalajsReactVersion withSources ()),
       ("org.scala-js" %%% "scalajs-dom"                              % "2.1.0")
     ),
     start := {
