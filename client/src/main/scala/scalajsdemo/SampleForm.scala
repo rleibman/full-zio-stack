@@ -13,6 +13,7 @@ import org.scalajs.dom.HTMLElement
 import net.leibman.fullziostack.semanticUiReact.components.*
 
 object SampleForm {
+
   case class Props(name: String)
 
   case class State(
@@ -21,16 +22,20 @@ object SampleForm {
   )
 
   class Backend($ : BackendScope[Props, State]) {
+
     def render(
       props: Props,
       state: State
     ): VdomElement =
       Modal.open(state.dlg)(
         ModalHeader("Results"),
-        ModalContent(s"The name is ${state.name}",
-        ModalActions(
-          Button.onClick((_, _) => $.modState(_.copy(dlg = false)))("Close")
-        )))
+        ModalContent(
+          s"The name is ${state.name}",
+          ModalActions(
+            Button.onClick((_, _) => $.modState(_.copy(dlg = false)))("Close")
+          )
+        )
+      )
 //      Form(
 //        FormField(
 //          Label("First Name"),

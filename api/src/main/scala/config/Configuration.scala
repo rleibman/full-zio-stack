@@ -22,7 +22,7 @@ case class Configuration(
   port:           Int = 8188,
   nettyThreads:   Int = 0, // When this is zero, it'll use numprocessors * 2
   maxRequestSize: Int = 210241024,
-  redirectUrl: String = "https://111.111.111.111"
+  redirectUrl:    String = "https://111.111.111.111"
 )
 
 trait ConfigurationService {

@@ -10,7 +10,6 @@ import model.*
 import zio.*
 import zio.Console.printLine
 
-import java.sql.SQLException
 import java.time.LocalDateTime
 import javax.sql.DataSource
 
@@ -18,19 +17,39 @@ import javax.sql.DataSource
 //
 package object db {
 
+  class DataServiceException(
+    val message: String = "",
+    val cause:   Option[Throwable]
+  ) extends Exception(message, cause.orNull) {}
 //  object QuillContext extends MysqlZioJdbcContext(SnakeCase) {
 //    val dataSourceLayer: ULayer[Has[DataSource]] =
 //      DataSourceLayer.fromPrefix("database").orDie
 //  }
+  object DataService {}
 
-  trait DataService[PK, TYPE] {
-    def all: IO[SQLException, List[TYPE]]
-    def get(id: PK): IO[SQLException, Option[TYPE]]
+  trait DataService[PK, TYPE, SEARCH] {
+
+    def search(search: Option[SEARCH] = None): IO[DataServiceException, List[TYPE]]
+    def get(id:        PK):                    IO[DataServiceException, Option[TYPE]]
     def delete(
       id:         PK,
       softDelete: Boolean
-    ): IO[SQLException, Boolean]
-    def upsert(obj: TYPE): IO[SQLException, TYPE]
+    ): IO[DataServiceException, Boolean]
+    def upsert(obj:    TYPE): IO[DataServiceException, TYPE]
+    def extractPK(obj: TYPE): PK
+
+  }
+
+  trait ModelObjectDataService extends DataService[ModelObjectId, ModelObject, Nothing] {
+
+    def extractPK(obj: ModelObject): ModelObjectId = obj.id
+
+  }
+
+  trait DataServices {
+
+    def modelObjectDS: DataService[ModelObjectId, ModelObject, Nothing]
+
   }
 
 //  object DataService {

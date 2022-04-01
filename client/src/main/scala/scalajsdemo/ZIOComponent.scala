@@ -12,6 +12,7 @@ import japgolly.scalajs.react.util.Effect
 import japgolly.scalajs.react.vdom.html_<^.*
 
 object ZIOComponent {
+
   private val component = ScalaFnComponent[Unit](_ => <.div("Hello!"))
 
   def apply(): Unmounted[Unit] = component()

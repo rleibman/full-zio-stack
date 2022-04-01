@@ -9,10 +9,15 @@ One of the most difficult thing in our field is to be able to choose a set of te
 ### ZIO Based
 
 #### zio-http
+#### Caliban
 #### zio-config
 #### zio-logging
 #### zio-test
 #### zio-json
+#### zio-jdbc
+#### zio-sql
+#### doobie
+Not strictly zio, but with the cats zio interop, it's super easy to combine
 #### quill
 
 ### Non-ZIO tech

@@ -42,12 +42,15 @@ lazy val scala3Opts = Seq(
 val zioVersion = "2.0.0-RC3"
 val zioHttpVersion = "2.0.0-RC4"
 val zioConfigVersion = "3.0.0-RC6"
-val zioLoggingVersion = "2.0.0-RC5"
-val zioJsonVersion = "0.3.0-RC4"
+val zioLoggingVersion = "2.0.0-RC6"
+val zioJsonVersion = "0.3.0-RC5"
+val calibanVersion = "2.0.0-RC2"
+val zioSqlVersion = "0.0.1"
 
 lazy val commonSettings: Project => Project =
   _.enablePlugins(AutomateHeaderPlugin, GitVersioning, BuildInfoPlugin)
-    .settings(buildInfoSettings, gitSettings, licenseSettings)
+    .configs(IntegrationTest)
+    .settings(Defaults.itSettings, buildInfoSettings, gitSettings, licenseSettings)
     .settings(
       scalaVersion := "3.1.0",
       scalacOptions ++= scala3Opts
@@ -59,15 +62,14 @@ lazy val modelJVM = model.jvm
 lazy val modelJS = model.js
 lazy val model = crossProject(JSPlatform, JVMPlatform)
   .configure(commonSettings)
-  .jvmSettings(
+  .settings(
     libraryDependencies ++= Seq(
       "dev.zio" %% "zio-json" % zioJsonVersion withSources ()
     )
   )
+  .jvmSettings(
+  )
   .jsSettings(
-    libraryDependencies ++= Seq(
-      "dev.zio" %% "zio-json" % zioJsonVersion withSources ()
-    )
   )
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,7 +102,10 @@ lazy val db = project
         ExclusionRule("com.lihaoyi", "fansi_2.13"),
         ExclusionRule("com.lihaoyi", "pprint_2.13"),
       ),
-      "mysql" % "mysql-connector-java" % "8.0.28" withSources ()
+      "mysql"    % "mysql-connector-java" % "8.0.28" withSources (),
+      "dev.zio" %% "zio-test"             % zioVersion % "it, test" withSources (),
+      "dev.zio" %% "zio-test-sbt"         % zioVersion % "it, test" withSources (),
+      "dev.zio" %% "zio-test-magnolia"    % zioVersion % "it, test" withSources ()
     )
   )
 
@@ -110,6 +115,7 @@ lazy val api = project
   .settings(
     libraryDependencies ++= Seq(
       "io.d11"  %% "zhttp"               % zioHttpVersion withSources (),
+      "dev.zio" %% "zio-managed"         % zioVersion withSources (), // temporary
       "dev.zio" %% "zio-test"            % zioVersion % "it, test" withSources (),
       "dev.zio" %% "zio-test-sbt"        % zioVersion % "it, test" withSources (),
       "dev.zio" %% "zio-test-magnolia"   % zioVersion % "it, test" withSources (),
@@ -119,6 +125,9 @@ lazy val api = project
       "dev.zio" %% "zio-logging"         % zioLoggingVersion withSources (),
       "dev.zio" %% "zio-logging-slf4j"   % zioLoggingVersion withSources (),
       "dev.zio" %% "zio-json"            % zioJsonVersion withSources (),
+//      "dev.zio" %% "zio-sql-mysql" % zioSqlVersion withSources(), // not really, neither compiled for 3, nor for the latest version of zio
+      "com.github.ghostdogpr" %% "caliban"          % calibanVersion withSources (),
+      "com.github.ghostdogpr" %% "caliban-zio-http" % calibanVersion withSources (),
 //      "io.getquill" %% "quill-jdbc-zio" % "3.17.0.Beta3.0-RC1" withSources(),
       "ch.qos.logback" % "logback-classic" % "1.3.0-alpha12" withSources (),
       "io.d11"        %% "zhttp-test"      % zioHttpVersion % "it, test"
@@ -183,7 +192,7 @@ lazy val stLib = project
   .configure(reactNpmDeps)
   .settings(
     name                     := "full-zio-stack-stLib",
-    scalaVersion := "3.1.0",
+    scalaVersion             := "3.1.0",
     useYarn                  := true,
     stOutputPackage          := "net.leibman.fullziostack",
     stFlavour                := Flavour.ScalajsReact,
@@ -213,14 +222,14 @@ lazy val client = project
     /* disabled because it somehow triggers many warnings */
     scalaJSLinkerConfig := scalaJSLinkerConfig.value.withSourceMap(false),
     libraryDependencies ++= Seq(
-      "dev.zio" %%% "zio"                                                % zioVersion withSources (),
-      ("io.github.cquiroz" %%% "scala-java-time"                          % "2.3.0" withSources ()),
-      ("io.github.cquiroz" %%% "scala-java-time-tzdb"                     % "2.3.0" withSources ()),
-      ("com.olvind" %%% "scalablytyped-runtime"                           % "2.4.2" withSources ()),
-      ("com.github.japgolly.scalajs-react" %%% "core-generic"                     % scalajsReactVersion withSources ()),
+      "dev.zio" %%% "zio"                                             % zioVersion withSources (),
+      "io.github.cquiroz" %%% "scala-java-time"                       % "2.3.0" withSources (),
+      "io.github.cquiroz" %%% "scala-java-time-tzdb"                  % "2.3.0" withSources (),
+      "com.olvind" %%% "scalablytyped-runtime"                        % "2.4.2" withSources (),
+      "com.github.japgolly.scalajs-react" %%% "core-generic"          % scalajsReactVersion withSources (),
       ("com.github.japgolly.scalajs-react" %%% "util-dummy-defaults") % scalajsReactVersion % Provided,
-      ("com.github.japgolly.scalajs-react" %%% "extra"                    % scalajsReactVersion withSources ()),
-      ("org.scala-js" %%% "scalajs-dom"                              % "2.1.0")
+      "com.github.japgolly.scalajs-react" %%% "extra"                 % scalajsReactVersion withSources (),
+      "org.scala-js" %%% "scalajs-dom"                                % "2.1.0"
     ),
     start := {
       (Compile / fastOptJS / startWebpackDevServer).value
