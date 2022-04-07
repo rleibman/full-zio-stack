@@ -6,15 +6,16 @@
 
 package graphql
 
-import caliban.GraphQL.graphQL
-import caliban.{GraphQL, RootResolver}
-import caliban.schema.Annotations.{GQLDeprecated, GQLDescription}
-import caliban.schema.{GenericSchema, Schema}
-import caliban.wrappers.ApolloTracing.apolloTracing
-import caliban.wrappers.Wrappers.*
 import db.ModelObjectDataService
 import graphql.FullZIOStackService.FullZIOStackService
 import model.*
+import caliban.GraphQL
+import caliban.GraphQL.graphQL
+import caliban.RootResolver
+import caliban.schema.Annotations.{GQLDeprecated, GQLDescription}
+import caliban.schema.{ArgBuilder, GenericSchema, Schema}
+import caliban.wrappers.ApolloTracing.apolloTracing
+import caliban.wrappers.Wrappers.*
 import zio.*
 import zio.stream.ZStream
 
@@ -38,38 +39,24 @@ object FullZIOStackApi extends GenericSchema[FullZIOStackService] {
     upsert: ModelObject => URIO[FullZIOStackService, ModelObject]
   )
 
-  given Schema[Any, ModelObjectId] with {
+  given Schema[FullZIOStackService, ModelObjectId] = intSchema.contramap[ModelObjectId](_.asInt)
+  given Schema[FullZIOStackService, ModelObjectType] = stringSchema.contramap[ModelObjectType](_.toString)
+  given Schema[FullZIOStackService, ModelObject] = gen[FullZIOStackService, ModelObject]
+  given ArgBuilder[ModelObjectId] = ArgBuilder.int.map[ModelObjectId](ModelObjectId.apply)
+  given ArgBuilder[ModelObjectType] = ArgBuilder.string.map[ModelObjectType](ModelObjectType.valueOf)
+  given Schema[FullZIOStackService, Queries] = gen[FullZIOStackService, Queries]
+  given Schema[FullZIOStackService, Mutations] = gen[FullZIOStackService, Mutations]
 
-    Schema.intSchema.contramap[ModelObjectId](_.asInt)
-
-  }
-  given Schema[Any, ModelObjectType] with {
-
-    Schema.stringSchema.contramap[ModelObjectType](_.toString)
-
-  }
-  given Schema[Any, ModelObject] with {
-
-    Schema.gen[Any, ModelObject]
-
-  }
-//  given Schema[Any, Queries] with {
-//    Schema.gen[Any, Queries]
-//  }
-//  given Schema[Any, Mutations] with {
-//    Schema.gen[Any, Mutations]
-//  }
-
-  val api: GraphQL[Console with Clock with FullZIOStackService] = graphQL(
+  val api: GraphQL[Console & Clock & FullZIOStackService] = graphQL(
     RootResolver(
       Queries(
-        all = FullZIOStackService.all.orDie,
-        search = FullZIOStackService.search.orDie,
-        get = id => FullZIOStackService.get(id).orDie
+        all = FullZIOStackService.all,
+        search = FullZIOStackService.search,
+        get = id => FullZIOStackService.get(id)
       ),
       Mutations(
-        delete = id => FullZIOStackService.delete(id).orDie,
-        upsert = modelObject => FullZIOStackService.upsert(modelObject).orDie
+        delete = id => FullZIOStackService.delete(id),
+        upsert = modelObject => FullZIOStackService.upsert(modelObject)
       )
     )
   ) @@

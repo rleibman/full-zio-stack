@@ -1,11 +1,16 @@
+/*
+ * Copyright 2021 Roberto Leibman
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import zhttp.http.*
-import zio.logging.slf4j.Slf4jLogger
 import zio.logging.{LogAnnotation, Logging}
 import zio.test.Assertion.*
 import zio.test.*
 import zio.{Has, ULayer}
 
-object MainSpec extends DefaultRunnableSpec {
+object MainSpec extends ZIOSpecDefault {
 
   def spec: Spec[Any, TestFailure[Serializable], TestSuccess] =
     suite("http")(
@@ -14,7 +19,7 @@ object MainSpec extends DefaultRunnableSpec {
         for {
           app <- Main.zapp
           one <- app(req)
-        } yield assertTrue(one.status == Status.OK)
+        } yield assertTrue(one.status == Status.Ok)
       },
       test("Running two tests against the same app") {
         val req = URL.fromString("/text").map(s => Request(url = s)).getOrElse(Request())
@@ -23,7 +28,7 @@ object MainSpec extends DefaultRunnableSpec {
           app <- Main.zapp
           one <- app(req)
           two <- app(req)
-        } yield assert(one.status)(equalTo(Status.OK)) && assert(two.status)(equalTo(Status.OK))
+        } yield assert(one.status)(equalTo(Status.Ok)) && assert(two.status)(equalTo(Status.Ok))
       }
     )
 

@@ -63,29 +63,17 @@ object Main extends ZIOApp {
         })
     }
 
-  given JsonDecoder[ModelObjectId] with {
-    summon[JsonDecoder[Int]].map(ModelObjectId.apply)
-  }
-  given JsonDecoder[ModelObjectType] with {
-    summon[JsonDecoder[String]].map(ModelObjectType.valueOf)
-  }
-  given JsonEncoder[ModelObjectId] with {
-    summon[JsonEncoder[Int]].contramap[ModelObjectId](_.asInt)
-  }
-  given JsonEncoder[ModelObjectType] with {
-    summon[JsonEncoder[String]].contramap[ModelObjectType](_.toString)
-  }
+  given JsonDecoder[ModelObjectId] = JsonDecoder.int.map(ModelObjectId.apply)
 
-  given JsonDecoder[ModelObject] with {
+  given JsonDecoder[ModelObjectType] = JsonDecoder.string.map(ModelObjectType.valueOf)
 
-    DeriveJsonDecoder.gen[ModelObject]
+  given JsonEncoder[ModelObjectId] = JsonEncoder.int.contramap[ModelObjectId](_.asInt)
 
-  }
-  given JsonEncoder[ModelObject] with {
+  given JsonEncoder[ModelObjectType] = JsonEncoder.string.contramap[ModelObjectType](_.toString)
 
-    DeriveJsonEncoder.gen[ModelObject]
+  given JsonDecoder[ModelObject] = DeriveJsonDecoder.gen[ModelObject]
 
-  }
+  given JsonEncoder[ModelObject] = DeriveJsonEncoder.gen[ModelObject]
 
   private val ModelObjectCRUDRouteZIO: ZIO[Environment, Throwable, Http[Environment, Throwable, Request, Response]] =
     for {
