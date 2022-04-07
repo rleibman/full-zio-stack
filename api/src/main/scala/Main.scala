@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import caliban.CalibanError
 import config.*
 import db.*
+import graphql.{FullZIOStackApi, FullZIOStackHttp}
 import izumi.reflect.Tag
 import model.*
 import zhttp.http.*
@@ -14,22 +16,23 @@ import zhttp.service.{EventLoopGroup, Server}
 import zio.json.*
 import zio.logging.backend.SLF4J
 import zio.stream.*
-import zio.{Console, ExitCode, RuntimeConfigAspect, UIO, ULayer, ZEnv, ZIO, ZIOApp, ZLayer}
+import zio.*
 
+import java.net.InetSocketAddress
 import java.nio.file
 import java.nio.file.Paths as JPaths
 
 object Main extends ZIOApp {
 
   // Customize the application a bit
-  override type Environment = ZEnv & ConfigurationService & ModelObjectDataService
+  override type Environment = ConfigurationService & ModelObjectDataService
 
   def tag: Tag[Environment] = Tag[Environment]
 
   override def hook: RuntimeConfigAspect = SLF4J.slf4j(zio.LogLevel.Debug)
 
   override val layer: ULayer[Environment] =
-    ZLayer.make[ZEnv & ConfigurationService & ModelObjectDataService](ZEnv.live, ConfigurationServiceLive.layer)
+    ZLayer.make[ConfigurationService & ModelObjectDataService](ConfigurationServiceLive.layer, MockDataServices.modelObjectDataServices)
   val rootDir = "/Volumes/Personal/projects/full-zio-stack/dist/"
   val port = 8090
 
@@ -59,6 +62,19 @@ object Main extends ZIOApp {
           case Method.GET -> !! / somethingElse => ZIO.succeed(Response(data = file(somethingElse)))
         })
     }
+
+  given JsonDecoder[ModelObjectId] with {
+    summon[JsonDecoder[Int]].map(ModelObjectId.apply)
+  }
+  given JsonDecoder[ModelObjectType] with {
+    summon[JsonDecoder[String]].map(ModelObjectType.valueOf)
+  }
+  given JsonEncoder[ModelObjectId] with {
+    summon[JsonEncoder[Int]].contramap[ModelObjectId](_.asInt)
+  }
+  given JsonEncoder[ModelObjectType] with {
+    summon[JsonEncoder[String]].contramap[ModelObjectType](_.toString)
+  }
 
   given JsonDecoder[ModelObject] with {
 
@@ -97,29 +113,43 @@ object Main extends ZIOApp {
       _                    <- ZIO.log("Initializing Routes")
       fileRoute            <- fileRouteZIO
       modelObjectCRUDRoute <- ModelObjectCRUDRouteZIO
-      calibanRoute         <- calibanRouteZIO
+      calibanRoute         <- FullZIOStackHttp.route
     } yield fileRoute ++ modelObjectCRUDRoute
 
-  def run: ZIO[Environment, Throwable, ExitCode] = {
-    // Configure thread count using CLI
-    (for {
+
+  def run = {
+    for {
       config <- ZIO.serviceWithZIO[ConfigurationService](_.config)
-      app    <- zapp
-      server <- {
-        (
-          Server.bind(config.host, config.port) ++ // Setup port
-            Server.maxRequestSize(config.maxRequestSize) ++
-            Server.app(app)
-        ).make
-          .use(start =>
-            // Waiting for the server to start
-            ZIO.logInfo(s"Server started on port ${start.port}") *>
-              ZIO.never // Ensures the server doesn't die after printing
-          )
-          // TODO, the next is clearly wrong, we shouldn't need to provide the configuration layer. We need to figure out how to bubble up te cofig service
-          .provideCustom(ConfigurationServiceLive.layer, ServerChannelFactory.auto, EventLoopGroup.auto(config.nettyThreads)).exitCode
-      }
-    } yield server).tapErrorCause(ZIO.logErrorCause(_))
+      app <- zapp
+      server = Server.bind(config.host, config.port) ++ // Setup port
+        Server.enableObjectAggregator(maxRequestSize = config.maxRequestSize) ++
+        Server.app(app)
+//      started <- Server.start(new InetSocketAddress(config.host, config.port), app)
+      started <- server.make.provide(layer, ServerChannelFactory.auto, EventLoopGroup.auto(), Scope.default)
+      _ <- Console.printLine(s"Server started on port ${started.port}") *> ZIO.never
+    } yield started
+    // Configure thread count using CLI
+//    (for {
+//      config <- ZIO.serviceWithZIO[ConfigurationService](_.config)
+//      app    <- zapp
+//      server = Server.bind(config.host, config.port) ++ // Setup port
+//        Server.enableObjectAggregator(maxRequestSize = config.maxRequestSize) ++
+//        Server.app(app)
+//      start <- (server : Server[Environment, Throwable]).make
+//      started <- (ZIO.logInfo(s"Server started on port ${start.port}") *>
+//        ZIO.never // Ensures the server doesn't die after printing
+//        )
+////      {
+////          .use(start =>
+////            // Waiting for the server to start
+////            ZIO.logInfo(s"Server started on port ${start.port}") *>
+////              ZIO.never // Ensures the server doesn't die after printing
+////          )
+//      // TODO, the next is clearly wrong, we shouldn't need to provide the configuration layer. We need to figure out how to bubble up te cofig service
+////          .provideCustom(ConfigurationServiceLive.layer, ServerChannelFactory.auto, EventLoopGroup.auto(config.nettyThreads)).exitCode
+////      }
+////      start <- server.start
+//    } yield started).tapErrorCause(ZIO.logErrorCause(_))
   }
 
 }

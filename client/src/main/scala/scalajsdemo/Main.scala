@@ -29,7 +29,7 @@ object Main {
     zio.Runtime.default.unsafeRunAsync(
       (for {
         session <- ZIO.service[Session]
-      } yield ScalaJSDemo(Some(session)).renderIntoDOM(dom.document.getElementById("container"))).provideCustomLayer(sessionLayer)
+      } yield ScalaJSDemo(Some(session)).renderIntoDOM(dom.document.getElementById("container"))).provideLayer(sessionLayer)
     )
 
   }

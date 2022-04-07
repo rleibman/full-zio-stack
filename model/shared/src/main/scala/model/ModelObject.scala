@@ -41,4 +41,3 @@ case class ModelObject(
   modelObjectType: ModelObjectType
 )
 
-val me = ModelObjectId(1)

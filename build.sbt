@@ -39,11 +39,11 @@ lazy val scala3Opts = Seq(
   "-Yexplicit-nulls" // Make reference types non-nullable. Nullable types can be expressed with unions: e.g. String|Null.
 )
 
-val zioVersion = "2.0.0-RC3"
-val zioHttpVersion = "2.0.0-RC4"
-val zioConfigVersion = "3.0.0-RC6"
-val zioLoggingVersion = "2.0.0-RC6"
-val zioJsonVersion = "0.3.0-RC5"
+val zioVersion = "2.0.0-RC4"
+val zioHttpVersion = "2.0.0-RC6"
+val zioConfigVersion = "3.0.0-RC7"
+val zioLoggingVersion = "2.0.0-RC7"
+val zioJsonVersion = "0.3.0-RC6"
 val calibanVersion = "2.0.0-RC2"
 val zioSqlVersion = "0.0.1"
 
@@ -129,7 +129,7 @@ lazy val api = project
       "com.github.ghostdogpr" %% "caliban"          % calibanVersion withSources (),
       "com.github.ghostdogpr" %% "caliban-zio-http" % calibanVersion withSources (),
 //      "io.getquill" %% "quill-jdbc-zio" % "3.17.0.Beta3.0-RC1" withSources(),
-      "ch.qos.logback" % "logback-classic" % "1.3.0-alpha12" withSources (),
+      "ch.qos.logback" % "logback-classic" % "1.3.0-alpha14" withSources (),
       "io.d11"        %% "zhttp-test"      % zioHttpVersion % "it, test"
     )
   )

@@ -25,6 +25,8 @@ object ZIOSqlDataServices {
 
   }
 
-  val modelObjectDataServices: URLayer[DataSource, ModelObjectDataService] = (ZIOSqlModelObjectDataService.apply _).toLayer[ModelObjectDataService]
+  val modelObjectDataServices: URLayer[DataSource, ModelObjectDataService] = (for {
+    ds <- ZIO.service[DataSource]
+  } yield ZIOSqlModelObjectDataService(ds)).toLayer
 
 }

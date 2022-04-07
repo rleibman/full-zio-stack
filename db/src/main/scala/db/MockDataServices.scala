@@ -1,9 +1,13 @@
+/*
+ * Copyright 2021 Roberto Leibman
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 package db
 
 import model.*
 import zio.*
-
-import javax.sql.DataSource
 
 object MockDataServices {
 
@@ -22,6 +26,6 @@ object MockDataServices {
 
   }
 
-  val modelObjectDataServices: ULayer[ModelObjectDataService] = (MockModelObjectDataService.apply _).toLayer[ModelObjectDataService]
+  val modelObjectDataServices: ULayer[ModelObjectDataService] = ZLayer.succeed(MockModelObjectDataService())
 
 }

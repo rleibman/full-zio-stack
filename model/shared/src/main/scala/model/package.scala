@@ -1,3 +1,9 @@
+/*
+ * Copyright 2021 Roberto Leibman
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import zio.json.*
 
 package object model {
