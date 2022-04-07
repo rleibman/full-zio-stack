@@ -4,15 +4,30 @@
  * SPDX-License-Identifier: MIT
  */
 
+import Main.Environment
+import config.{ConfigurationService, ConfigurationServiceLive}
+import db.{MockDataServices, ModelObjectDataService}
 import zhttp.http.*
-import zio.logging.{LogAnnotation, Logging}
+import zio.*
+import zio.internal.stacktracer.Tracer
+import zio.logging.LogAnnotation
 import zio.test.Assertion.*
-import zio.test.*
-import zio.{Has, ULayer}
+import zio.test.{ZIOSpec, ZSpec, *}
 
-object MainSpec extends ZIOSpecDefault {
+object MainSpec extends ZIOSpec[TestEnvironment with Main.Environment] {
 
-  def spec: Spec[Any, TestFailure[Serializable], TestSuccess] =
+  implicit val trace: zio.ZTraceElement = Tracer.newTrace
+
+  override val layer =
+    ZLayer.make[TestEnvironment & Main.Environment](
+      ConfigurationServiceLive.layer,
+      MockDataServices.modelObjectDataServices,
+      zio.ZEnv.live,
+      TestEnvironment.live,
+      Scope.default
+    )
+
+  override def spec: ZSpec[TestEnvironment & Main.Environment & Scope, Any] =
     suite("http")(
       test("should be ok") {
         val req = URL.fromString("/text").map(s => Request(url = s)).getOrElse(Request())
