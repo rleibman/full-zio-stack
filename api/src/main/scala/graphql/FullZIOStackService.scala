@@ -37,7 +37,7 @@ object FullZIOStackService {
   def upsert(modelObject: ModelObject): URIO[FullZIOStackService, ModelObject] = URIO.serviceWithZIO(_.upsert(modelObject))
 
   def make: ZLayer[ModelObjectDataService, Nothing, FullZIOStackService] =
-    (for {
+    ZLayer(for {
       ds <- ZIO.service[ModelObjectDataService]
     } yield new FullZIOStackService {
 
@@ -51,6 +51,6 @@ object FullZIOStackService {
 
       override def upsert(modelObject: ModelObject): UIO[ModelObject] = ds.upsert(modelObject).orDie
 
-    }).toLayer
+    })
 
 }

@@ -18,7 +18,7 @@ object MainSpec extends ZIOSpec[TestEnvironment with Main.Environment] {
 
   implicit val trace: zio.ZTraceElement = Tracer.newTrace
 
-  override val layer =
+  override val layer: ULayer[TestEnvironment & Main.Environment] =
     ZLayer.make[TestEnvironment & Main.Environment](
       ConfigurationServiceLive.layer,
       MockDataServices.modelObjectDataServices,

@@ -39,7 +39,7 @@ lazy val scala3Opts = Seq(
   "-Yexplicit-nulls" // Make reference types non-nullable. Nullable types can be expressed with unions: e.g. String|Null.
 )
 
-val zioVersion = "2.0.0-RC4"
+val zioVersion = "2.0.0-RC5"
 val zioHttpVersion = "2.0.0-RC6"
 val zioConfigVersion = "3.0.0-RC7"
 val zioLoggingVersion = "2.0.0-RC7"
@@ -115,7 +115,6 @@ lazy val api = project
   .settings(
     libraryDependencies ++= Seq(
       "io.d11"  %% "zhttp"               % zioHttpVersion withSources (),
-      "dev.zio" %% "zio-managed"         % zioVersion withSources (), // temporary
       "dev.zio" %% "zio-test"            % zioVersion % "it, test" withSources (),
       "dev.zio" %% "zio-test-sbt"        % zioVersion % "it, test" withSources (),
       "dev.zio" %% "zio-test-magnolia"   % zioVersion % "it, test" withSources (),
@@ -204,9 +203,8 @@ lazy val stLib = project
     /* disabled because it somehow triggers many warnings */
     scalaJSLinkerConfig ~= (_.withSourceMap(false)),
     libraryDependencies ++= Seq(
-      "com.github.japgolly.scalajs-react" %%% "core-generic"        % scalajsReactVersion withSources (),
+      "com.github.japgolly.scalajs-react" %%% "core"        % scalajsReactVersion withSources (),
       "com.github.japgolly.scalajs-react" %%% "extra"               % scalajsReactVersion withSources (),
-      "com.github.japgolly.scalajs-react" %%% "util-dummy-defaults" % scalajsReactVersion withSources ()
     )
   )
 
@@ -226,8 +224,7 @@ lazy val client = project
       "io.github.cquiroz" %%% "scala-java-time"                       % "2.3.0" withSources (),
       "io.github.cquiroz" %%% "scala-java-time-tzdb"                  % "2.3.0" withSources (),
       "com.olvind" %%% "scalablytyped-runtime"                        % "2.4.2" withSources (),
-      "com.github.japgolly.scalajs-react" %%% "core-generic"          % scalajsReactVersion withSources (),
-      ("com.github.japgolly.scalajs-react" %%% "util-dummy-defaults") % scalajsReactVersion % Provided,
+      "com.github.japgolly.scalajs-react" %%% "core"          % scalajsReactVersion withSources (),
       "com.github.japgolly.scalajs-react" %%% "extra"                 % scalajsReactVersion withSources (),
       "org.scala-js" %%% "scalajs-dom"                                % "2.1.0"
     ),
