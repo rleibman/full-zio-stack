@@ -13,7 +13,7 @@ object MockDataServices {
 
   final private case class MockModelObjectDataService() extends ModelObjectDataService {
 
-    def search(search: Option[Nothing]): IO[DataServiceException, List[ModelObject]] = ???
+    def search(search: Option[Nothing]): IO[DataServiceException, IndexedSeq[ModelObject]] = ???
 
     def delete(
       id:         ModelObjectId,

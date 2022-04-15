@@ -6,6 +6,8 @@
 
 package model
 
+import zio.json.{DeriveJsonDecoder, DeriveJsonEncoder, JsonDecoder, JsonEncoder}
+
 import java.time.LocalDateTime
 
 enum ModelObjectType {

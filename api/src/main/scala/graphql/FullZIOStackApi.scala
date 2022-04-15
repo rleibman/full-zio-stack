@@ -50,8 +50,8 @@ object FullZIOStackApi extends GenericSchema[FullZIOStackService] {
   val api: GraphQL[Console & Clock & FullZIOStackService] = graphQL(
     RootResolver(
       Queries(
-        all = FullZIOStackService.all,
-        search = FullZIOStackService.search,
+        all = FullZIOStackService.all.map(_.toList),
+        search = FullZIOStackService.search.map(_.toList),
         get = id => FullZIOStackService.get(id)
       ),
       Mutations(

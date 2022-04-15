@@ -7,7 +7,7 @@
 package db
 
 import model.*
-import zio.*
+import zio.{IO, URLayer, ZIO, ZLayer}
 
 import javax.sql.DataSource
 
@@ -15,7 +15,7 @@ object QuillDataServices {
 
   final private case class QuillModelObjectDataService(dataSource: DataSource) extends ModelObjectDataService {
 
-    def search(search: Option[Nothing]): IO[DataServiceException, List[ModelObject]] = ???
+    def search(search: Option[Nothing]): IO[DataServiceException, IndexedSeq[ModelObject]] = ???
     def delete(
       id:         ModelObjectId,
       softDelete: Boolean
@@ -25,8 +25,8 @@ object QuillDataServices {
 
   }
 
-  val modelObjectDataServices: URLayer[DataSource, ModelObjectDataService] = (for {
+  val modelObjectDataServices: URLayer[DataSource, ModelObjectDataService] = ZLayer.fromZIO(for {
     ds <- ZIO.service[DataSource]
-  } yield QuillModelObjectDataService(ds)).toLayer
+  } yield QuillModelObjectDataService(ds))
 
 }

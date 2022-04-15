@@ -15,9 +15,9 @@ object FullZIOStackService {
 
   trait FullZIOStackService {
 
-    def all: UIO[List[ModelObject]]
+    def all: UIO[IndexedSeq[ModelObject]]
 
-    def search: UIO[List[ModelObject]]
+    def search: UIO[IndexedSeq[ModelObject]]
 
     def get(id: ModelObjectId): UIO[Option[ModelObject]]
 
@@ -26,9 +26,9 @@ object FullZIOStackService {
     def upsert(modelObject: ModelObject): UIO[ModelObject]
 
   }
-  def all: URIO[FullZIOStackService, List[ModelObject]] = URIO.serviceWithZIO(_.all)
+  def all: URIO[FullZIOStackService, IndexedSeq[ModelObject]] = URIO.serviceWithZIO(_.all)
 
-  def search: URIO[FullZIOStackService, List[ModelObject]] = URIO.serviceWithZIO(_.search)
+  def search: URIO[FullZIOStackService, IndexedSeq[ModelObject]] = URIO.serviceWithZIO(_.search)
 
   def get(id: ModelObjectId): URIO[FullZIOStackService, Option[ModelObject]] = URIO.serviceWithZIO(_.get(id))
 
@@ -41,9 +41,9 @@ object FullZIOStackService {
       ds <- ZIO.service[ModelObjectDataService]
     } yield new FullZIOStackService {
 
-      override def all: UIO[List[ModelObject]] = ds.search(None).orDie
+      override def all: UIO[IndexedSeq[ModelObject]] = ds.search(None).orDie
 
-      override def search: UIO[List[ModelObject]] = ds.search(None).orDie
+      override def search: UIO[IndexedSeq[ModelObject]] = ds.search(None).orDie
 
       override def get(id: ModelObjectId): UIO[Option[ModelObject]] = ds.get(id).orDie
 

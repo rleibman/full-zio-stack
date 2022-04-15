@@ -7,7 +7,7 @@
 package db
 
 import model.*
-import zio.*
+import zio.{IO, URLayer, ZIO, ZLayer}
 
 import javax.sql.DataSource
 
@@ -15,7 +15,7 @@ object ZIOJdbcDataServices {
 
   final private case class ZIOJdbcModelObjectDataService(dataSource: DataSource) extends ModelObjectDataService {
 
-    def search(search: Option[Nothing]): IO[DataServiceException, List[ModelObject]] = ???
+    def search(search: Option[Nothing]): IO[DataServiceException, IndexedSeq[ModelObject]] = ???
 
     def delete(
       id:         ModelObjectId,
@@ -28,8 +28,8 @@ object ZIOJdbcDataServices {
 
   }
 
-  val modelObjectDataServices: URLayer[DataSource, ModelObjectDataService] = (for {
+  val modelObjectDataServices: URLayer[DataSource, ModelObjectDataService] = ZLayer.fromZIO(for {
     ds <- ZIO.service[DataSource]
-  } yield ZIOJdbcModelObjectDataService(ds)).toLayer
+  } yield ZIOJdbcModelObjectDataService(ds))
 
 }

@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import io.getquill.*
-import io.getquill.context.ZioJdbc.*
 import model.*
 import zio.*
 import zio.Console.printLine
@@ -17,10 +15,16 @@ import javax.sql.DataSource
 //
 package object db {
 
+  object DataServiceException {
+    def apply(t: Throwable) = t match {
+      case t: DataServiceException => t
+      case cause => new DataServiceException("", Some(cause))
+    }
+  }
   class DataServiceException(
     val message: String = "",
     val cause:   Option[Throwable]
-  ) extends Exception(message, cause.orNull) {}
+  ) extends Exception(message, cause.orNull)
 //  object QuillContext extends MysqlZioJdbcContext(SnakeCase) {
 //    val dataSourceLayer: ULayer[Has[DataSource]] =
 //      DataSourceLayer.fromPrefix("database").orDie
@@ -29,7 +33,7 @@ package object db {
 
   trait DataService[PK, TYPE, SEARCH] {
 
-    def search(search: Option[SEARCH] = None): IO[DataServiceException, List[TYPE]]
+    def search(search: Option[SEARCH] = None): IO[DataServiceException, IndexedSeq[TYPE]]
     def get(id:        PK):                    IO[DataServiceException, Option[TYPE]]
     def delete(
       id:         PK,
