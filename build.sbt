@@ -40,7 +40,7 @@ lazy val scala3Opts = Seq(
 )
 
 val zioVersion = "2.0.0-RC5"
-val zioHttpVersion = "2.0.0-RC6"
+val zioHttpVersion = "2.0.0-RC7"
 val zioConfigVersion = "3.0.0-RC8"
 val zioLoggingVersion = "2.0.0-RC8"
 val zioJsonVersion = "0.3.0-RC7"
@@ -112,7 +112,7 @@ lazy val db = crossProject(JSPlatform, JVMPlatform)
         ExclusionRule("com.lihaoyi", "fansi_2.13"),
         ExclusionRule("com.lihaoyi", "pprint_2.13"),
       ),
-      "mysql" % "mysql-connector-java" % "8.0.28" withSources ()
+      "mysql" % "mysql-connector-java" % "8.0.29" withSources ()
     )
   )
   .jsSettings(
@@ -165,25 +165,27 @@ lazy val start = TaskKey[Unit]("start")
 lazy val dist = TaskKey[File]("dist")
 
 val scalajsReactVersion = "2.1.0"
+val reactVersion = "17.0.0"
 
 // specify versions for all of reacts dependencies to compile less since we have many demos here
 lazy val reactNpmDeps: Project => Project =
   _.settings(
     Compile / npmDependencies ++= Seq(
-      "react"             -> "16.13.1",
-      "react-dom"         -> "16.13.1",
-      "@types/react"      -> "16.9.42",
-      "@types/react-dom"  -> "16.9.8",
+      "react-dom"         -> reactVersion,
+      "@types/react-dom"  -> reactVersion,
+      "react"             -> reactVersion,
+      "@types/react"      -> reactVersion,
       "csstype"           -> "2.6.11",
       "@types/prop-types" -> "15.7.3"
     )
   )
 
 lazy val bundlerSettings: Project => Project =
-  _.settings(
-    Compile / fastOptJS / webpackDevServerExtraArgs += "--mode=development",
-    Compile / fullOptJS / webpackDevServerExtraArgs += "--mode=production"
-  )
+  _.enablePlugins(ScalaJSBundlerPlugin)
+    .settings(
+      Compile / fastOptJS / webpackDevServerExtraArgs += "--mode=development",
+      Compile / fullOptJS / webpackDevServerExtraArgs += "--mode=production"
+    )
 
 lazy val withCssLoading: Project => Project =
   _.settings(
@@ -222,7 +224,7 @@ lazy val stLib = project
   )
 
 lazy val client = project
-  .enablePlugins(ScalaJSPlugin, ScalaJSBundlerPlugin)
+  .enablePlugins(ScalaJSPlugin)
   .dependsOn(modelJS, dbJS, stLib)
   .configure(commonSettings, reactNpmDeps, bundlerSettings, withCssLoading)
   .settings(
@@ -240,7 +242,8 @@ lazy val client = project
       "com.olvind" %%% "scalablytyped-runtime"        % "2.4.2" withSources (),
       "com.github.japgolly.scalajs-react" %%% "core"  % scalajsReactVersion withSources (),
       "com.github.japgolly.scalajs-react" %%% "extra" % scalajsReactVersion withSources (),
-      "org.scala-js" %%% "scalajs-dom"                % "2.1.0"
+      "org.scala-js" %%% "scalajs-dom"                % "2.1.0",
+      ("org.scala-js" %%% "scalajs-java-securerandom" % "1.0.0").cross(CrossVersion.for3Use2_13)
     ),
     start := {
       (Compile / fastOptJS / startWebpackDevServer).value
