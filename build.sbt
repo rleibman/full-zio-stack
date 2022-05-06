@@ -4,7 +4,7 @@ import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Global stuff
 Global / onChangedBuildSource := ReloadOnSourceChanges
-Global / scalaVersion         := "3.1.0"
+Global / scalaVersion         := "3.1.2"
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Shared settings
@@ -39,11 +39,11 @@ lazy val scala3Opts = Seq(
   "-Yexplicit-nulls" // Make reference types non-nullable. Nullable types can be expressed with unions: e.g. String|Null.
 )
 
-val zioVersion = "2.0.0-RC5"
+val zioVersion = "2.0.0-RC6"
 val zioHttpVersion = "2.0.0-RC7"
-val zioConfigVersion = "3.0.0-RC8"
-val zioLoggingVersion = "2.0.0-RC8"
-val zioJsonVersion = "0.3.0-RC7"
+val zioConfigVersion = "3.0.0-RC9"
+val zioLoggingVersion = "2.0.0-RC10"
+val zioJsonVersion = "0.3.0-RC8"
 val calibanVersion = "2.0.0-RC2"
 val zioSqlVersion = "0.0.1"
 
@@ -52,7 +52,7 @@ lazy val commonSettings: Project => Project =
     .configs(IntegrationTest)
     .settings(Defaults.itSettings, buildInfoSettings, gitSettings, licenseSettings)
     .settings(
-      scalaVersion := "3.1.0",
+      scalaVersion := "3.1.2",
       scalacOptions ++= scala3Opts
     )
 
@@ -75,7 +75,7 @@ lazy val model = crossProject(JSPlatform, JVMPlatform)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Server
 
-val quillVersion = "3.17.0.Beta3.0-RC2"
+val quillVersion = "3.17.0.Beta30-RC4"
 
 lazy val dbJVM = db.jvm
 lazy val dbJS = db.js
@@ -164,7 +164,7 @@ lazy val start = TaskKey[Unit]("start")
   */
 lazy val dist = TaskKey[File]("dist")
 
-val scalajsReactVersion = "2.1.0"
+val scalajsReactVersion = "2.1.1"
 val reactVersion = "17.0.0"
 
 // specify versions for all of reacts dependencies to compile less since we have many demos here
@@ -206,7 +206,7 @@ lazy val stLib = project
   .configure(reactNpmDeps)
   .settings(
     name                     := "full-zio-stack-stLib",
-    scalaVersion             := "3.1.0",
+    scalaVersion             := "3.1.2",
     useYarn                  := true,
     stOutputPackage          := "net.leibman.fullziostack",
     stFlavour                := Flavour.ScalajsReact,
