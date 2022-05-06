@@ -12,22 +12,19 @@ import zio.*
 import zio.internal.stacktracer.Tracer
 import zio.logging.LogAnnotation
 import zio.test.Assertion.*
-import zio.test.{ZIOSpec, ZSpec, *}
+import zio.test.{ZIOSpec, *}
 
 object MainSpec extends ZIOSpec[TestEnvironment with Main.Environment] {
 
-  implicit val trace: zio.ZTraceElement = Tracer.newTrace
-
-  override val layer: ULayer[TestEnvironment & Main.Environment] =
+  override val bootstrap: ZLayer[ZIOAppArgs with Scope, Any, TestEnvironment & Main.Environment] =
     ZLayer.make[TestEnvironment & Main.Environment](
       ConfigurationServiceLive.layer,
       MockDataServices.modelObjectDataServices,
       zio.ZEnv.live,
-      TestEnvironment.live,
-      Scope.default
+      TestEnvironment.live
     )
 
-  override def spec: ZSpec[TestEnvironment & Main.Environment & Scope, Any] =
+  override def spec =
     suite("http")(
       test("should be ok") {
         val req = URL.fromString("/text").map(s => Request(url = s)).getOrElse(Request())

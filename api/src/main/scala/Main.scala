@@ -28,12 +28,16 @@ object Main extends ZIOApp {
   // Customize the application a bit
   override type Environment = ConfigurationService & ModelObjectDataService
 
-  def tag: Tag[Environment] = Tag[Environment]
+  def environmentTag: Tag[ConfigurationService & ModelObjectDataService] = Tag[ConfigurationService & ModelObjectDataService]
 
-  override def hook: RuntimeConfigAspect = SLF4J.slf4j(zio.LogLevel.Debug)
+//  override def hook = SLF4J.slf4j(zio.LogLevel.Debug)
 
-  override val layer: ULayer[Environment] =
-    ZLayer.make[ConfigurationService & ModelObjectDataService](ConfigurationServiceLive.layer, MockDataServices.modelObjectDataServices)
+  def bootstrap =
+    ZLayer.make[ConfigurationService & ModelObjectDataService](
+      ConfigurationServiceLive.layer,
+      MockDataServices.modelObjectDataServices,
+      SLF4J.slf4j(zio.LogLevel.Debug)
+    )
   val rootDir = "/Volumes/Personal/projects/full-zio-stack/dist/"
   val port = 8090
 
@@ -93,17 +97,16 @@ object Main extends ZIOApp {
       calibanRoute         <- FullZIOStackHttp.route
     } yield fileRoute ++ modelObjectCRUDRoute
 
-
   def run = {
     for {
       config <- ZIO.serviceWithZIO[ConfigurationService](_.config)
-      app <- zapp
+      app    <- zapp
       server = Server.bind(config.host, config.port) ++ // Setup port
         Server.enableObjectAggregator(maxRequestSize = config.maxRequestSize) ++
         Server.app(app)
 //      started <- Server.start(new InetSocketAddress(config.host, config.port), app)
-      started <- server.make.provide(layer, ServerChannelFactory.auto, EventLoopGroup.auto(), Scope.default)
-      _ <- Console.printLine(s"Server started on port ${started.port}") *> ZIO.never
+      started <- server.make.provide(bootstrap, ServerChannelFactory.auto, EventLoopGroup.auto(), Scope.default, ZIOAppArgs.empty)
+      _       <- Console.printLine(s"Server started on port ${started.port}") *> ZIO.never
     } yield started
     // Configure thread count using CLI
 //    (for {

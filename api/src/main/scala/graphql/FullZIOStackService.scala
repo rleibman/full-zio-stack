@@ -26,15 +26,15 @@ object FullZIOStackService {
     def upsert(modelObject: ModelObject): UIO[ModelObject]
 
   }
-  def all: URIO[FullZIOStackService, IndexedSeq[ModelObject]] = URIO.serviceWithZIO(_.all)
+  def all: URIO[FullZIOStackService, IndexedSeq[ModelObject]] = ZIO.serviceWithZIO(_.all)
 
-  def search: URIO[FullZIOStackService, IndexedSeq[ModelObject]] = URIO.serviceWithZIO(_.search)
+  def search: URIO[FullZIOStackService, IndexedSeq[ModelObject]] = ZIO.serviceWithZIO(_.search)
 
-  def get(id: ModelObjectId): URIO[FullZIOStackService, Option[ModelObject]] = URIO.serviceWithZIO(_.get(id))
+  def get(id: ModelObjectId): URIO[FullZIOStackService, Option[ModelObject]] = ZIO.serviceWithZIO(_.get(id))
 
-  def delete(id: ModelObjectId): URIO[FullZIOStackService, Boolean] = URIO.serviceWithZIO(_.delete(id))
+  def delete(id: ModelObjectId): URIO[FullZIOStackService, Boolean] = ZIO.serviceWithZIO(_.delete(id))
 
-  def upsert(modelObject: ModelObject): URIO[FullZIOStackService, ModelObject] = URIO.serviceWithZIO(_.upsert(modelObject))
+  def upsert(modelObject: ModelObject): URIO[FullZIOStackService, ModelObject] = ZIO.serviceWithZIO(_.upsert(modelObject))
 
   def make: ZLayer[ModelObjectDataService, Nothing, FullZIOStackService] =
     ZLayer(for {

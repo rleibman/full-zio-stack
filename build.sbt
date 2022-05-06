@@ -75,7 +75,7 @@ lazy val model = crossProject(JSPlatform, JVMPlatform)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Server
 
-val quillVersion = "3.17.0.Beta30-RC4"
+val quillVersion = "3.17.0.Beta3.0-RC4"
 
 lazy val dbJVM = db.jvm
 lazy val dbJS = db.js
