@@ -9,10 +9,8 @@ package db
 import model.*
 import model.given
 import zio.{IO, ULayer, ZIO, ZLayer}
-import zhttp.service.*
+import zio.http.*
 import zio.json.*
-import zhttp.http.*
-import zhttp.http.headers.*
 
 object RESTDataServices {
 

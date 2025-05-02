@@ -19,6 +19,9 @@ target
 # IntelliJ
 .idea
 
+#vscode
+.vscode
+
 # ENSIME
 .ensime
 .ensime_lucene
@@ -42,8 +45,17 @@ good.txt
 badurl.txt
 urlImport.csv
 
+*.lock
+
 dist
 debugDist
 dist
+/.env
+/.bloop/
+/.metals/
+/project/metals.sbt
+/project/.bloop/
 
 /tree.txt
+/temp
+

@@ -1,7 +1,22 @@
 /*
- * Copyright 2021 Roberto Leibman
+ * Copyright (c) 2024 Roberto Leibman
  *
- * SPDX-License-Identifier: MIT
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+ * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 import model.*
@@ -15,15 +30,21 @@ import javax.sql.DataSource
 //
 package object db {
 
+  import scala.language.unsafeNulls
+
   object DataServiceException {
-    def apply(t: Throwable) = t match {
-      case t: DataServiceException => t
-      case cause => new DataServiceException("", Some(cause))
-    }
+
+    def apply(t: Throwable) =
+      t match {
+        case t: DataServiceException => t
+        case cause => new DataServiceException("", Some(cause))
+      }
+
   }
   class DataServiceException(
-    val message: String = "",
-    val cause:   Option[Throwable]
+    val message:     String = "",
+    val cause:       Option[Throwable],
+    val isTransient: Boolean = false
   ) extends Exception(message, cause.orNull)
 //  object QuillContext extends MysqlZioJdbcContext(SnakeCase) {
 //    val dataSourceLayer: ULayer[Has[DataSource]] =
@@ -38,7 +59,7 @@ package object db {
     def delete(
       id:         PK,
       softDelete: Boolean
-    ): IO[DataServiceException, Boolean]
+    ):                        IO[DataServiceException, Boolean]
     def upsert(obj:    TYPE): IO[DataServiceException, TYPE]
     def extractPK(obj: TYPE): PK
 

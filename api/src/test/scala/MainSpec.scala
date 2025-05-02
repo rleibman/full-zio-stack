@@ -7,7 +7,7 @@
 import Main.Environment
 import config.{ConfigurationService, ConfigurationServiceLive}
 import db.{MockDataServices, ModelObjectDataService}
-import zhttp.http.*
+import zio.http.*
 import zio.*
 import zio.internal.stacktracer.Tracer
 import zio.logging.LogAnnotation

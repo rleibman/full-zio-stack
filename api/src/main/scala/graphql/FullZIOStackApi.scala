@@ -1,27 +1,39 @@
 /*
- * Copyright 2021 Roberto Leibman
+ * Copyright (c) 2024 Roberto Leibman
  *
- * SPDX-License-Identifier: MIT
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+ * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 package graphql
 
-import db.ModelObjectDataService
-import graphql.FullZIOStackService.FullZIOStackService
-import model.*
-import caliban.GraphQL
-import caliban.GraphQL.graphQL
-import caliban.RootResolver
-import caliban.schema.Annotations.{GQLDeprecated, GQLDescription}
-import caliban.schema.{ArgBuilder, GenericSchema, Schema}
-import caliban.wrappers.ApolloTracing.apolloTracing
+import caliban.*
+import caliban.schema.*
+import caliban.schema.Annotations.GQLDescription
+import caliban.schema.ArgBuilder.auto.*
+import caliban.schema.Schema.auto.*
 import caliban.wrappers.Wrappers.*
+import graphql.FullZIOStackService
+import model.*
 import zio.*
-import zio.stream.ZStream
 
 import scala.language.postfixOps
 
-object FullZIOStackApi extends GenericSchema[FullZIOStackService] {
+object FullZIOStackApi {
 
   case class Queries(
     @GQLDescription("//TODO document this")
@@ -41,13 +53,13 @@ object FullZIOStackApi extends GenericSchema[FullZIOStackService] {
 
   given Schema[FullZIOStackService, ModelObjectId] = intSchema.contramap[ModelObjectId](_.asInt)
   given Schema[FullZIOStackService, ModelObjectType] = stringSchema.contramap[ModelObjectType](_.toString)
-  given Schema[FullZIOStackService, ModelObject] = gen[FullZIOStackService, ModelObject]
+  given Schema[FullZIOStackService, ModelObject] = Schema.gen[FullZIOStackService, ModelObject]
   given ArgBuilder[ModelObjectId] = ArgBuilder.int.map[ModelObjectId](ModelObjectId.apply)
   given ArgBuilder[ModelObjectType] = ArgBuilder.string.map[ModelObjectType](ModelObjectType.valueOf)
-  given Schema[FullZIOStackService, Queries] = gen[FullZIOStackService, Queries]
-  given Schema[FullZIOStackService, Mutations] = gen[FullZIOStackService, Mutations]
+  given Schema[FullZIOStackService, Queries] = Schema.gen[FullZIOStackService, Queries]
+  given Schema[FullZIOStackService, Mutations] = Schema.gen[FullZIOStackService, Mutations]
 
-  val api: GraphQL[Console & Clock & FullZIOStackService] = graphQL(
+  lazy val api: GraphQL[Console & Clock & FullZIOStackService] = graphQL(
     RootResolver(
       Queries(
         all = FullZIOStackService.all.map(_.toList),
@@ -59,12 +71,10 @@ object FullZIOStackApi extends GenericSchema[FullZIOStackService] {
         upsert = modelObject => FullZIOStackService.upsert(modelObject)
       )
     )
-  ) @@
-    maxFields(200) @@ // query analyzer that limit query fields
-    maxDepth(30) @@ // query analyzer that limit query depth
-    timeout(3 seconds) @@ // wrapper that fails slow queries
-    printSlowQueries(500 millis) @@ // wrapper that logs slow queries
-    printErrors @@ // wrapper that logs errors
-    apolloTracing // wrapper for https://github.com/apollographql/apollo-tracing
+  ) @@ maxFields(200) // query analyzer that limit query fields
+    @@ maxDepth(30) // query analyzer that limit query depth
+    @@ timeout(3 seconds) // wrapper that fails slow queries
+    @@ printSlowQueries(500 millis) // wrapper that logs slow queries
+    @@ printErrors // wrapper that logs errors
 
 }

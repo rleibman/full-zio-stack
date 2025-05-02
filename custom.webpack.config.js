@@ -1,7 +1,8 @@
-var merge = require('webpack-merge');
+const {merge} = require('webpack-merge');
 var generated = require('./scalajs.webpack.config');
 
 var local = {
+    resolve: {"fallback": {"crypto": false}},
     module: {
         rules: [
             {

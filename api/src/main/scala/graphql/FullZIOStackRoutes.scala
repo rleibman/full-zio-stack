@@ -19,29 +19,29 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package db
+package graphql
 
-import model.*
-import zio.{IO, URLayer, ZIO, ZLayer}
+import caliban.{CalibanError, GraphiQLHandler, QuickAdapter}
+import db.ModelObjectDataService
+import zio.http.*
+import zio.{Clock, Console, IO, ZIO}
 
-import javax.sql.DataSource
+object FullZIOStackRoutes {
 
-object ZIOSqlDataServices {
-
-  final private case class ZIOSqlModelObjectDataService(dataSource: DataSource) extends ModelObjectDataService {
-
-    def search(search: Option[Nothing]): IO[DataServiceException, IndexedSeq[ModelObject]] = ???
-    def delete(
-      id:         ModelObjectId,
-      softDelete: Boolean
-    ): zio.IO[DataServiceException, Boolean] = ???
-    def get(id:     ModelObjectId): zio.IO[DataServiceException, Option[ModelObject]] = ???
-    def upsert(obj: ModelObject):   zio.IO[DataServiceException, ModelObject] = ???
-
-  }
-
-  val modelObjectDataServices: URLayer[DataSource, ModelObjectDataService] = ZLayer.fromZIO(for {
-    ds <- ZIO.service[DataSource]
-  } yield ZIOSqlModelObjectDataService(ds))
+  def api =
+    for {
+      interpreter <- FullZIOStackApi.api.interpreter
+    } yield {
+      Routes(
+        Method.ANY / "api" ->
+          QuickAdapter(interpreter).handlers.api,
+        Method.ANY / "api" / "graphiql" ->
+          GraphiQLHandler.handler(apiPath = "/api/dnd5e"),
+        Method.POST / "api" / "upload" ->
+          QuickAdapter(interpreter).handlers.upload,
+        Method.GET / "unauth" / "schema" ->
+          Handler.fromBody(Body.fromCharSequence(FullZIOStackApi.api.render))
+      )
+    }
 
 }
