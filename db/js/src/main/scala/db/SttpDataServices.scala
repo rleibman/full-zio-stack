@@ -21,27 +21,25 @@
 
 package db
 
+import japgolly.scalajs.react.AsyncCallback
 import model.*
-import zio.{IO, URLayer, ZIO, ZLayer}
 
-import javax.sql.DataSource
+object SttpDataServices {
 
-object ZIOSqlDataServices {
+  private val host = "localhost"
+  private val port = 1881
 
-  final private case class ZIOSqlModelObjectDataService(dataSource: DataSource) extends ModelObjectDataService {
+  val live: ModelObjectDataService[AsyncCallback] = new ModelObjectDataService[AsyncCallback] {
+    override def search(search: Option[Nothing]): AsyncCallback[IndexedSeq[ModelObject]] = ???
 
-    def search(search: Option[Nothing]): IO[DataServiceException, IndexedSeq[ModelObject]] = ???
-    def delete(
+    override def get(id: ModelObjectId): AsyncCallback[Option[ModelObject]] = ???
+
+    override def delete(
       id:         ModelObjectId,
       softDelete: Boolean
-    ): zio.IO[DataServiceException, Boolean] = ???
-    def get(id:     ModelObjectId): zio.IO[DataServiceException, Option[ModelObject]] = ???
-    def upsert(obj: ModelObject):   zio.IO[DataServiceException, ModelObject] = ???
+    ): AsyncCallback[Boolean] = ???
 
+    override def upsert(obj: ModelObject): AsyncCallback[ModelObject] = ???
   }
-
-  val modelObjectDataServices: URLayer[DataSource, ModelObjectDataService] = ZLayer.fromZIO(for {
-    ds <- ZIO.service[DataSource]
-  } yield ZIOSqlModelObjectDataService(ds))
 
 }

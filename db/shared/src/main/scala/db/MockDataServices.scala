@@ -26,21 +26,21 @@ import zio.*
 
 object MockDataServices {
 
-  final private case class MockModelObjectDataService() extends ModelObjectDataService {
+  final private case class MockModelObjectDataService() extends ModelObjectDataService[DBIO] {
 
-    def search(search: Option[Nothing]): IO[DataServiceException, IndexedSeq[ModelObject]] = ???
+    def search(search: Option[Nothing]): DBIO[IndexedSeq[ModelObject]] = ZIO.succeed(IndexedSeq.empty)
 
     def delete(
       id:         ModelObjectId,
       softDelete: Boolean
-    ): zio.IO[DataServiceException, Boolean] = ???
+    ): DBIO[Boolean] = ZIO.succeed(true)
 
-    def get(id: ModelObjectId): zio.IO[DataServiceException, Option[ModelObject]] = ???
+    def get(id: ModelObjectId): DBIO[Option[ModelObject]] = ZIO.none
 
-    def upsert(obj: ModelObject): zio.IO[DataServiceException, ModelObject] = ???
+    def upsert(obj: ModelObject): DBIO[ModelObject] = ZIO.succeed(obj)
 
   }
 
-  val modelObjectDataServices: ULayer[ModelObjectDataService] = ZLayer.succeed(MockModelObjectDataService())
+  val mock: ULayer[ModelObjectDataService[DBIO]] = ZLayer.succeed(MockModelObjectDataService())
 
 }

@@ -28,19 +28,19 @@ import javax.sql.DataSource
 
 object DoobieDataServices {
 
-  final private case class DoobieModelObjectDataService(dataSource: DataSource) extends ModelObjectDataService {
+  final private case class DoobieModelObjectDataService(dataSource: DataSource) extends ModelObjectDataService[DBIO] {
 
-    def search(search: Option[Nothing]): IO[DataServiceException, IndexedSeq[ModelObject]] = ???
+    def search(search: Option[Nothing]): DBIO[IndexedSeq[ModelObject]] = ???
     def delete(
       id:         ModelObjectId,
       softDelete: Boolean
-    ): zio.IO[DataServiceException, Boolean] = ???
-    def get(id:     ModelObjectId): zio.IO[DataServiceException, Option[ModelObject]] = ???
-    def upsert(obj: ModelObject):   zio.IO[DataServiceException, ModelObject] = ???
+    ): DBIO[Boolean] = ???
+    def get(id:     ModelObjectId): DBIO[Option[ModelObject]] = ???
+    def upsert(obj: ModelObject):   DBIO[ModelObject] = ???
 
   }
 
-  val modelObjectDataServices: URLayer[DataSource, ModelObjectDataService] = ZLayer.fromZIO(for {
+  val live: URLayer[DataSource, ModelObjectDataService[DBIO]] = ZLayer.fromZIO(for {
     ds <- ZIO.service[DataSource]
   } yield DoobieModelObjectDataService(ds))
 

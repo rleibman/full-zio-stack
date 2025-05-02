@@ -22,7 +22,7 @@
 package graphql
 
 import config.ConfigurationService
-import db.{DataServiceException, ModelObjectDataService}
+import db.{DataServiceException, ModelObjectDataService, DBIO}
 import model.*
 import zio.*
 
@@ -52,9 +52,9 @@ object FullZIOStackService {
 
   def upsert(modelObject: ModelObject): URIO[FullZIOStackService, ModelObject] = ZIO.serviceWithZIO(_.upsert(modelObject))
 
-  def live: ZLayer[ModelObjectDataService, Nothing, FullZIOStackService] =
+  def live: ZLayer[ModelObjectDataService[DBIO], Nothing, FullZIOStackService] =
     ZLayer(for {
-      ds <- ZIO.service[ModelObjectDataService]
+      ds <- ZIO.service[ModelObjectDataService[DBIO]]
     } yield new FullZIOStackService {
 
       override def all: UIO[IndexedSeq[ModelObject]] = ds.search(None).orDie

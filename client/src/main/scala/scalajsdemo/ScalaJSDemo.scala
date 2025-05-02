@@ -29,6 +29,6 @@ object ScalaJSDemo {
 
   private val component = ScalaFnComponent[Unit](_ => <.div("Hello!", SampleForm("Roberto")))
 
-  def apply(session: Option[Session]): Unmounted[Unit] = component()
+  def apply(): Unmounted[Unit] = component()
 
 }

@@ -20,7 +20,7 @@
  */
 
 import config.ConfigurationService
-import db.{DataServiceException, ModelObjectDataService}
+import db.{DataServiceException, ModelObjectDataService, DBIO}
 import zio.*
 import zio.http.*
 
@@ -28,9 +28,9 @@ import java.io.{PrintWriter, StringWriter}
 
 object Main extends ZIOApp {
 
-  override type Environment = ConfigurationService & ModelObjectDataService
+  override type Environment = ConfigurationService & ModelObjectDataService[DBIO]
   override val environmentTag: EnvironmentTag[Environment] = EnvironmentTag[Environment]
-  override def bootstrap:      ULayer[ConfigurationService & ModelObjectDataService] = EnvironmentBuilder.live
+  override def bootstrap:      ULayer[ConfigurationService & ModelObjectDataService[DBIO]] = EnvironmentBuilder.live
 
   def mapError(original: Cause[Throwable]): UIO[Response] = {
     lazy val contentTypeJson: Headers = Headers(Header.ContentType(MediaType.application.json).untyped)

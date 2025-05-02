@@ -21,6 +21,7 @@
 
 package scalajsdemo
 
+import db.SttpDataServices
 import japgolly.scalajs.react.*
 import japgolly.scalajs.react.component.Scala.Unmounted
 import japgolly.scalajs.react.vdom.html_<^.*
@@ -28,27 +29,9 @@ import model.*
 import model.given
 import net.leibman.fullziostack.semanticUiReact.components.*
 import org.scalajs.dom.HTMLElement
-import zio.http.*
-import zio.*
 import zio.json.*
 
 import scala.concurrent.Future
-
-extension [A](z: Task[A]) {
-
-  def toAsyncCallback: AsyncCallback[A] = {
-    import scala.scalajs.concurrent.JSExecutionContext.Implicits._
-    def fut = zio.Runtime.default.unsafeRunToFuture(z)
-    AsyncCallback.fromFuture(fut)
-  }
-  def toCallback(fn: A => Callback): Callback = {
-    z.map(fn).toAsyncCallback.completeWith(_.get)
-  }
-  def toCallback: Callback = {
-    toAsyncCallback.toCallback
-  }
-
-}
 
 object ModelObjectTable {
 
@@ -60,13 +43,10 @@ object ModelObjectTable {
 
     import scala.scalajs.concurrent.JSExecutionContext.Implicits._
     def init(): Callback = {
-      val z: Task[IndexedSeq[ModelObject]] = (for {
-        res    <- Client.request("/modelObjects")
-        str    <- res.bodyAsString
-        parsed <- ZIO.fromEither(str.fromJson[IndexedSeq[ModelObject]]).mapError(new Exception(_))
-      } yield parsed).provideLayer(ChannelFactory.auto ++ EventLoopGroup.auto())
-
-      z.toCallback(modelObjects => $.modState(s => s.copy(modelObjects = modelObjects)))
+      val async = for {
+        res <- SttpDataServices.live.search(None)
+      } yield $.modState(s => s.copy(modelObjects = res))
+      async.completeWith(_.get)
     }
 
     def render(

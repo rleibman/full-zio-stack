@@ -11,7 +11,7 @@ lazy val buildTime: SettingKey[String] = SettingKey[String]("buildTime", "time o
 
 ThisBuild / resolvers ++= Resolver.sonatypeOssRepos("snapshots")
 
-lazy val SCALA = "3.7.0-RC4"
+lazy val SCALA = "3.6.4"
 Global / onChangedBuildSource := ReloadOnSourceChanges
 scalaVersion                  := SCALA
 Global / scalaVersion         := SCALA
@@ -93,7 +93,6 @@ lazy val model = crossProject(JSPlatform, JVMPlatform)
       "dev.zio" %% "zio-json" % zioJsonVersion withSources ()
     )
   )
-  .jvmEnablePlugins(GitVersioning, BuildInfoPlugin)
   .jvmSettings(
     version := gitDescribedVersion.value.getOrElse("0.0.1-SNAPSHOT"),
     libraryDependencies ++= Seq(
@@ -110,15 +109,13 @@ lazy val model = crossProject(JSPlatform, JVMPlatform)
       "io.kevinlee" %% "just-semver-core"      % "1.1.1" withSources ()
     )
   )
-  .jsEnablePlugins(GitVersioning, BuildInfoPlugin)
   .jsSettings(
     version := gitDescribedVersion.value.getOrElse("0.0.1-SNAPSHOT"),
     libraryDependencies ++= Seq(
-      "net.leibman"                        % "zio-auth_sjs1_3" % "1.0.0-SNAPSHOT" withSources (), // I don't know why %% isn't working.
-      "dev.zio" %%% "zio"                  % zioVersion withSources (),
-      "dev.zio" %%% "zio-json"             % zioJsonVersion withSources (),
-      "dev.zio" %%% "zio-prelude"          % "1.0.0-RC40" withSources (),
-      "io.kevinlee" %%% "just-semver-core" % "1.1.1" withSources (),
+      "dev.zio" %%% "zio"                                                 % zioVersion withSources (),
+      "dev.zio" %%% "zio-json"                                            % zioJsonVersion withSources (),
+      "dev.zio" %%% "zio-prelude"                                         % "1.0.0-RC40" withSources (),
+      "io.kevinlee" %%% "just-semver-core"                                % "1.1.1" withSources (),
       "com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core"   % "2.35.2",
       "com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-macros" % "2.35.2"
     )
@@ -129,11 +126,15 @@ lazy val model = crossProject(JSPlatform, JVMPlatform)
 lazy val dbJVM = db.jvm
 lazy val dbJS = db.js
 lazy val db = crossProject(JSPlatform, JVMPlatform)
-  .enablePlugins(AutomateHeaderPlugin)
-  .settings(commonSettings)
+  .enablePlugins(AutomateHeaderPlugin, GitVersioning)
+  .settings(
+    name         := "full-zio-stack-db",
+    scalaVersion := SCALA,
+    commonSettings
+  )
   .dependsOn(model)
   .jvmSettings(
-    name := "full-zio-stack-db",
+    version := gitDescribedVersion.value.getOrElse("0.0.1-SNAPSHOT"),
     libraryDependencies ++= Seq(
       // DB
       "org.mariadb.jdbc" % "mariadb-java-client" % "3.5.3" withSources (),
@@ -163,8 +164,13 @@ lazy val db = crossProject(JSPlatform, JVMPlatform)
   )
   .jsSettings(
     libraryDependencies ++= Seq(
-      "dev.zio"                                   %% "zio-http" % zioHttpVersion withSources (),
-      "com.github.ghostdogpr" %%% "caliban-client" % calibanVersion withSources ()
+      "com.softwaremill.sttp.client4" %%% "core"      % "4.0.3" withSources (),
+      "com.softwaremill.sttp.client4" %%% "zio-json"  % "4.0.3" withSources (),
+      "com.olvind" %%% "scalablytyped-runtime"        % "2.4.2",
+      "com.github.japgolly.scalajs-react" %%% "core"  % scalajsReactVersion withSources (),
+      "com.github.japgolly.scalajs-react" %%% "extra" % scalajsReactVersion withSources (),
+      "com.github.ghostdogpr" %%% "caliban-client"    % calibanVersion withSources (),
+      "dev.zio" %%% "zio-json"                        % zioJsonVersion withSources ()
     )
   )
 
@@ -293,40 +299,30 @@ lazy val stLib = project
     stFlavour                := Flavour.ScalajsReact,
     stReactEnableTreeShaking := Selection.All,
     Compile / npmDependencies ++= Seq(
-      "react-dom"         -> reactVersion,
+      "@types/react"      -> reactVersion,
       "@types/react-dom"  -> reactVersion,
       "react"             -> reactVersion,
-      "@types/react"      -> reactVersion,
+      "react-dom"         -> reactVersion,
+      "@types/prop-types" -> "^15.7.0",
+      "csstype"           -> "^3.1.0",
       "semantic-ui-react" -> "^2.1.5"
     ),
+    Test / npmDependencies ++= Seq(
+      "react"     -> reactVersion,
+      "react-dom" -> reactVersion
+    ),
     scalaJSUseMainModuleInitializer := true,
+    // focus only on these libraries
     /* disabled because it somehow triggers many warnings */
     scalaJSLinkerConfig ~= (_.withSourceMap(false)),
-    libraryDependencies ++= Seq(
-      "com.github.ghostdogpr" %%% "caliban-client"    % calibanVersion withSources (),
-      "dev.zio" %%% "zio"                             % zioVersion withSources (),
-      "com.softwaremill.sttp.client4" %%% "core"      % "4.0.3" withSources (),
-      "com.softwaremill.sttp.client4" %%% "zio-json"  % "4.0.3" withSources (),
-      "io.github.cquiroz" %%% "scala-java-time"       % "2.6.0" withSources (),
-      "io.github.cquiroz" %%% "scala-java-time-tzdb"  % "2.6.0" withSources (),
-      "org.scala-js" %%% "scalajs-dom"                % "2.8.0" withSources (),
-      "com.olvind" %%% "scalablytyped-runtime"        % "2.4.2",
-      "com.github.japgolly.scalajs-react" %%% "core"  % scalajsReactVersion withSources (),
-      "com.github.japgolly.scalajs-react" %%% "extra" % scalajsReactVersion withSources (),
-      "com.lihaoyi" %%% "scalatags"                   % "0.13.1" withSources (),
-      "com.github.japgolly.scalacss" %%% "core"       % "1.0.0" withSources (),
-      "com.github.japgolly.scalacss" %%% "ext-react"  % "1.0.0" withSources ()
-    ),
-    organizationName                     := "Roberto Leibman",
-    startYear                            := Some(2024),
-    headerLicense                        := Some(HeaderLicense.MIT("2024", "Roberto Leibman", HeaderLicenseStyle.Detailed)),
-    Compile / unmanagedSourceDirectories := Seq((Compile / scalaSource).value),
-    Test / unmanagedSourceDirectories    := Seq((Test / scalaSource).value)
-    //    webpackDevServerPort                 := 8009
+    stMinimize       := Selection.AllExcept("semantic-ui-react"),
+    organizationName := "Roberto Leibman",
+    startYear        := Some(2024),
+    headerLicense    := Some(HeaderLicense.MIT("2024", "Roberto Leibman", HeaderLicenseStyle.Detailed))
   )
 
-lazy val client: Project = project
-  .dependsOn(modelJS, stLib)
+lazy val client = project
+  .dependsOn(modelJS, dbJS, stLib)
   .settings(commonSettings)
   .configure(bundlerSettings)
   .configure(withCssLoading)
@@ -344,7 +340,7 @@ lazy val client: Project = project
     ),
     debugDist := {
 
-      val assets = (ThisBuild / baseDirectory).value / "web" / "src" / "main" / "web"
+      val assets = (ThisBuild / baseDirectory).value / "client" / "src" / "main" / "web"
 
       val artifacts = (Compile / fastOptJS / webpack).value
       val artifactFolder = (Compile / fastOptJS / crossTarget).value
@@ -363,7 +359,7 @@ lazy val client: Project = project
       debugFolder
     },
     dist := {
-      val assets = (ThisBuild / baseDirectory).value / "web" / "src" / "main" / "web"
+      val assets = (ThisBuild / baseDirectory).value / "client" / "src" / "main" / "web"
 
       val artifacts = (Compile / fullOptJS / webpack).value
       val artifactFolder = (Compile / fullOptJS / crossTarget).value
@@ -387,7 +383,7 @@ lazy val client: Project = project
 // Root project
 lazy val root = project
   .in(file("."))
-  .aggregate(modelJVM, modelJS, api, util, dbJVM, modelJS, stLib, client)
+  .aggregate(modelJVM, modelJS, api, util, dbJVM, dbJS, stLib, client)
   .settings(
     name           := "full-zio-stack",
     publish / skip := true,
