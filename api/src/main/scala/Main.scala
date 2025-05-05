@@ -20,7 +20,7 @@
  */
 
 import config.ConfigurationService
-import db.{DataServiceException, ModelObjectDataService, DBIO}
+import db.{DBIO, DataServiceException, ModelObjectDataService}
 import zio.*
 import zio.http.*
 

@@ -203,11 +203,13 @@ lazy val api = project
       "dev.zio"                %% "zio-config-magnolia"   % zioConfigVersion withSources (),
       "dev.zio"                %% "zio-config-typesafe"   % zioConfigVersion withSources (),
       "dev.zio"                %% "zio-logging-slf4j2"    % "2.5.0" withSources (),
+      "dev.zio"                %% "zio-schema"            % "1.7.0" withSources (),
       "dev.zio"                %% "izumi-reflect"         % "3.0.2" withSources (),
       "com.github.ghostdogpr"  %% "caliban"               % calibanVersion withSources (),
       "com.github.ghostdogpr"  %% "caliban-zio-http"      % calibanVersion withSources (),
       "com.github.ghostdogpr"  %% "caliban-quick"         % calibanVersion withSources (),
       "dev.zio"                %% "zio-http"              % zioHttpVersion withSources (),
+      "dev.zio"                %% "zio-http-cli"          % zioHttpVersion withSources (),
       "com.github.jwt-scala"   %% "jwt-circe"             % "10.0.4" withSources (),
       "dev.zio"                %% "zio-json"              % zioJsonVersion withSources (),
       "org.scala-lang.modules" %% "scala-xml"             % "2.3.0" withSources (),
@@ -226,6 +228,15 @@ lazy val api = project
 // Utility
 lazy val util = project
   .settings(commonSettings)
+
+lazy val codeGen = project
+  .settings(
+    commonSettings,
+    libraryDependencies ++= Seq(
+      "dev.zio" %% "zio-http"     % zioHttpVersion withSources (),
+      "dev.zio" %% "zio-http-gen" % zioHttpVersion withSources ()
+    )
+  )
 
 ////////////////////////////////////////////////////////////////////////////////////
 // Web
@@ -335,7 +346,6 @@ lazy val client = project
   .settings(
     name := "full-zio-stack-web",
     libraryDependencies ++= Seq(
-      "dev.zio" %%% "zio"      % zioVersion withSources (),
       "dev.zio" %%% "zio-json" % zioJsonVersion withSources ()
     ),
     debugDist := {
@@ -383,7 +393,7 @@ lazy val client = project
 // Root project
 lazy val root = project
   .in(file("."))
-  .aggregate(modelJVM, modelJS, api, util, dbJVM, dbJS, stLib, client)
+  .aggregate(modelJVM, modelJS, api, util, dbJVM, dbJS, stLib, client, codeGen)
   .settings(
     name           := "full-zio-stack",
     publish / skip := true,

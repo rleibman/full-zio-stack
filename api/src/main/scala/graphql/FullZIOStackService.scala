@@ -22,7 +22,7 @@
 package graphql
 
 import config.ConfigurationService
-import db.{DataServiceException, ModelObjectDataService, DBIO}
+import db.{DBIO, DataServiceException, ModelObjectDataService}
 import model.*
 import zio.*
 

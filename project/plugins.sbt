@@ -8,7 +8,6 @@ addSbtPlugin("org.scalameta"     % "sbt-scalafmt"              % "2.5.4")
 addSbtPlugin("com.github.cb372"  % "sbt-explicit-dependencies" % "0.3.1")
 addSbtPlugin("ch.epfl.scala"     % "sbt-scalafix"              % "0.14.2")
 addSbtPlugin("com.typesafe"      % "sbt-mima-plugin"           % "1.1.4")
-addSbtPlugin("dev.guardrail"     % "sbt-guardrail"             % "0.75.2")
 
 ////////////////////////////////////////////////////////////////////////////////////
 // Server
