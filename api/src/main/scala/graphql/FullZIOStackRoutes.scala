@@ -21,8 +21,27 @@
 
 package graphql
 
-object Gen extends App {
+import caliban.{CalibanError, GraphiQLHandler, QuickAdapter}
+import db.ModelObjectDataService
+import zio.http.*
+import zio.{Clock, Console, IO, ZIO}
 
-  println(FullZIOStackApi.api.render)
+object FullZIOStackRoutes {
+
+  def api =
+    for {
+      interpreter <- FullZIOStackApi.api.interpreter
+    } yield {
+      Routes(
+        Method.ANY / "api" ->
+          QuickAdapter(interpreter).handlers.api,
+        Method.ANY / "api" / "graphiql" ->
+          GraphiQLHandler.handler(apiPath = "/api/dnd5e"),
+        Method.POST / "api" / "upload" ->
+          QuickAdapter(interpreter).handlers.upload,
+        Method.GET / "unauth" / "schema" ->
+          Handler.fromBody(Body.fromCharSequence(FullZIOStackApi.api.render))
+      )
+    }
 
 }

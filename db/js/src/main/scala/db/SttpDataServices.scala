@@ -19,10 +19,27 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package graphql
+package db
 
-object Gen extends App {
+import japgolly.scalajs.react.AsyncCallback
+import model.*
 
-  println(FullZIOStackApi.api.render)
+object SttpDataServices {
+
+  private val host = "localhost"
+  private val port = 1881
+
+  val live: ModelObjectDataService[AsyncCallback] = new ModelObjectDataService[AsyncCallback] {
+    override def search(search: Option[Nothing]): AsyncCallback[IndexedSeq[ModelObject]] = ???
+
+    override def get(id: ModelObjectId): AsyncCallback[Option[ModelObject]] = ???
+
+    override def delete(
+      id:         ModelObjectId,
+      softDelete: Boolean
+    ): AsyncCallback[Boolean] = ???
+
+    override def upsert(obj: ModelObject): AsyncCallback[ModelObject] = ???
+  }
 
 }

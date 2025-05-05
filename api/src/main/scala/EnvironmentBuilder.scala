@@ -19,10 +19,28 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package graphql
+import com.zaxxer.hikari.HikariDataSource
+import config.ConfigurationService
+import db.{DBIO, MockDataServices, ModelObjectDataService, QuillDataServices}
+import zio.*
 
-object Gen extends App {
+object EnvironmentBuilder {
 
-  println(FullZIOStackApi.api.render)
+  val mock: ULayer[ConfigurationService & ModelObjectDataService[DBIO]] = ZLayer.make[ConfigurationService & ModelObjectDataService[DBIO]](
+    ConfigurationService.live,
+    MockDataServices.mock
+  )
+
+  private val dataServiceLayer: URLayer[ConfigurationService, HikariDataSource] = ZLayer.fromZIO {
+    for {
+      config <- ZIO.serviceWithZIO[ConfigurationService](_.appConfig)
+    } yield config.dataSource
+  }.orDie
+
+  val live: ULayer[ConfigurationService & ModelObjectDataService[DBIO]] = ZLayer.make[ConfigurationService & ModelObjectDataService[DBIO]](
+    ConfigurationService.live,
+    QuillDataServices.live,
+    dataServiceLayer
+  )
 
 }

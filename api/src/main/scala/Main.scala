@@ -1,135 +1,94 @@
 /*
- * Copyright 2021 Roberto Leibman
+ * Copyright (c) 2024 Roberto Leibman
  *
- * SPDX-License-Identifier: MIT
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+ * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-import caliban.CalibanError
-import config.*
-import db.*
-import graphql.{FullZIOStackApi, FullZIOStackHttp}
-import izumi.reflect.Tag
-import model.*
-import model.given
-import zhttp.http.*
-import zhttp.service.server.ServerChannelFactory
-import zhttp.service.{EventLoopGroup, Server}
-import zio.json.*
-import zio.logging.backend.SLF4J
-import zio.stream.*
+import config.ConfigurationService
+import db.{DBIO, DataServiceException, ModelObjectDataService}
 import zio.*
+import zio.http.*
 
-import java.net.InetSocketAddress
-import java.nio.file
-import java.nio.file.Paths as JPaths
+import java.io.{PrintWriter, StringWriter}
 
 object Main extends ZIOApp {
 
-  // Customize the application a bit
-  override type Environment = ConfigurationService & ModelObjectDataService
+  override type Environment = ConfigurationService & ModelObjectDataService[DBIO]
+  override val environmentTag: EnvironmentTag[Environment] = EnvironmentTag[Environment]
+  override def bootstrap:      ULayer[ConfigurationService & ModelObjectDataService[DBIO]] = EnvironmentBuilder.live
 
-  def environmentTag: Tag[ConfigurationService & ModelObjectDataService] = Tag[ConfigurationService & ModelObjectDataService]
+  def mapError(original: Cause[Throwable]): UIO[Response] = {
+    lazy val contentTypeJson: Headers = Headers(Header.ContentType(MediaType.application.json).untyped)
 
-//  override def hook = SLF4J.slf4j(zio.LogLevel.Debug)
+    val squashed = original.squash
+    val sw = StringWriter()
+    val pw = PrintWriter(sw)
+    squashed.printStackTrace(pw)
 
-  def bootstrap =
-    ZLayer.make[ConfigurationService & ModelObjectDataService](
-      ConfigurationServiceLive.layer,
-      MockDataServices.modelObjectDataServices,
-      SLF4J.slf4j(zio.LogLevel.Debug)
-    )
-  val rootDir = "/Volumes/Personal/projects/full-zio-stack/dist/"
-  val port = 8090
+    val body = "Error in DMScreen"
+    // We really don't want details
 
-  private def logRequest(req: Request): UIO[Unit] =
-    (for {
-      body <- req.bodyAsString
-      _ <-
-        ZIO.logInfo(s"${req.method.toString()} request to ${req.url.encode}: " + body)
-    } yield ()).ignore
-
-  private def file(fileName: String) =
-    HttpData.fromStream {
-      JPaths.get(s"$rootDir$fileName") match {
-        case path: java.nio.file.Path => ZStream.fromPath(path)
-        case null => throw new NullPointerException()
-      }
+    //    {
+    //      s"""{
+    //      "exceptionMessage": ${squashed.getMessage},
+    //      "stackTrace": ${sw.toString}
+    //    }"""
+    //    }
+    val status = squashed match {
+      case e: DataServiceException if e.isTransient => Status.BadGateway
+      case _ => Status.InternalServerError
     }
+    ZIO
+      .logErrorCause("Error in DMScreen", original).as(
+        Response.apply(body = Body.fromString(body), status = status, headers = contentTypeJson)
+      )
+  }
 
-  private val fileRouteZIO: ZIO[Environment, Throwable, Http[Environment, Throwable, Request, Response]] =
-    for {
-      config <- ZIO.serviceWithZIO[ConfigurationService](_.config)
-    } yield Http.collectZIO[Request] { request =>
-      logRequest(request) *>
-        (request match {
-          case Method.GET -> !!                 => ZIO.succeed(Response(data = file("index.html")))
-          case Method.GET -> !! / "text"        => ZIO.succeed(Response.text("Hello World!"))
-          case Method.GET -> !! / somethingElse => ZIO.succeed(Response(data = file(somethingElse)))
-        })
-    }
+  lazy val zapp = for {
+    _           <- ZIO.log("Initializing Routes")
+    fileRoutes  <- AllRoutes.fileRoutes
+    modelRoutes <- AllRoutes.modelRoutes
+  } yield (modelRoutes ++ fileRoutes)
+    .handleErrorCauseZIO(mapError)
 
-  private val ModelObjectCRUDRouteZIO: ZIO[Environment, Throwable, Http[Environment, Throwable, Request, Response]] =
-    for {
-      db     <- ZIO.service[ModelObjectDataService]
-      config <- ZIO.serviceWithZIO[ConfigurationService](_.config)
-    } yield Http.collectZIO[Request] { request =>
-      logRequest(request) *>
-        (request match {
-          case Method.GET -> !! / "modelObject" / id        => db.get(ModelObjectId(id.toInt)).map(o => Response.json(o.toJson))
-          case Method.GET -> !! / "modelObjects"            => db.search().map(o => Response.json(o.toJson))
-          case Method.GET -> !! / "modelObjects" / "search" => db.search().map(o => Response.json(o.toJson))
-          case Method.DELETE -> !! / "modelObject" / id     => db.delete(ModelObjectId(id.toInt), softDelete = true).map(o => Response.json(o.toJson))
-          case Method.POST -> !! / "modelObject" | Method.PUT -> !! / "modelObject" =>
-            for {
-              str      <- request.bodyAsString
-              obj      <- ZIO.fromEither(str.fromJson[ModelObject]).mapError(new Exception(_))
-              upserted <- db.upsert(obj)
-            } yield Response.json(upserted.toJson)
-
-        })
-    }
-
-  val zapp: ZIO[Environment, Throwable, Http[Environment, Throwable, Request, Response]] =
-    for {
-      _                    <- ZIO.log("Initializing Routes")
-      fileRoute            <- fileRouteZIO
-      modelObjectCRUDRoute <- ModelObjectCRUDRouteZIO
-      calibanRoute         <- FullZIOStackHttp.route
-    } yield fileRoute ++ modelObjectCRUDRoute
-
-  def run = {
-    for {
-      config <- ZIO.serviceWithZIO[ConfigurationService](_.config)
-      app    <- zapp
-      server = Server.bind(config.host, config.port) ++ // Setup port
-        Server.enableObjectAggregator(maxRequestSize = config.maxRequestSize) ++
-        Server.app(app)
-//      started <- Server.start(new InetSocketAddress(config.host, config.port), app)
-      started <- server.make.provide(bootstrap, ServerChannelFactory.auto, EventLoopGroup.auto(), Scope.default, ZIOAppArgs.empty)
-      _       <- Console.printLine(s"Server started on port ${started.port}") *> ZIO.never
-    } yield started
+  override def run = {
     // Configure thread count using CLI
-//    (for {
-//      config <- ZIO.serviceWithZIO[ConfigurationService](_.config)
-//      app    <- zapp
-//      server = Server.bind(config.host, config.port) ++ // Setup port
-//        Server.enableObjectAggregator(maxRequestSize = config.maxRequestSize) ++
-//        Server.app(app)
-//      start <- (server : Server[Environment, Throwable]).make
-//      started <- (ZIO.logInfo(s"Server started on port ${start.port}") *>
-//        ZIO.never // Ensures the server doesn't die after printing
-//        )
-////      {
-////          .use(start =>
-////            // Waiting for the server to start
-////            ZIO.logInfo(s"Server started on port ${start.port}") *>
-////              ZIO.never // Ensures the server doesn't die after printing
-////          )
-//      // TODO, the next is clearly wrong, we shouldn't need to provide the configuration layer. We need to figure out how to bubble up te cofig service
-////          .provideCustom(ConfigurationServiceLive.layer, ServerChannelFactory.auto, EventLoopGroup.auto(config.nettyThreads)).exitCode
-////      }
-////      start <- server.start
-//    } yield started).tapErrorCause(ZIO.logErrorCause(_))
+    for {
+      config <- ZIO.serviceWithZIO[ConfigurationService](_.appConfig)
+      app    <- zapp
+      _      <- ZIO.logInfo(s"Starting application with config $config")
+      server <- {
+        val serverConfig = ZLayer.succeed(
+          Server.Config.default
+            .binding(config.http.hostName, config.http.port)
+        )
+
+        Server
+          .serve(app)
+          .zipLeft(ZIO.logDebug(s"Server Started on ${config.http.port}"))
+          .tapErrorCause(ZIO.logErrorCause(s"Server on port ${config.http.port} has unexpectedly stopped", _))
+          .provideSome[Environment](serverConfig, Server.live)
+          .foldCauseZIO(
+            cause => ZIO.logErrorCause("err when booting server", cause).exitCode,
+            _ => ZIO.logError("app quit unexpectedly...").exitCode
+          )
+      }
+    } yield server
   }
 
 }

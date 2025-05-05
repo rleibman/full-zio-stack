@@ -1,6 +1,14 @@
--J-Xmx4G
--J-Xms3G
--J-Xss2M
--J-XX:MaxMetaspaceSize=2048M
+## see https://weblogs.java.net/blog/kcpeppe/archive/2013/12/11/case-study-jvm-hotspot-flags
+#-J-Dfile.encoding=UTF8
+#-J-Xms1G
+#-J-Xmx2G
+#-J-XX:MaxPermSize=1024M
+#-J-XX:ReservedCodeCacheSize=250M
+#-J-XX:+TieredCompilation
+#-J-XX:-UseGCOverheadLimit
+#-J-XX:MaxMetaspaceSize=1024m
+# effectively adds GC to Perm space
+# must be enabled for CMSClassUnloadingEnabled to work
+-J-Xmx5G
+-J-Xss1024M
 -J-XX:+UseG1GC
--Dpackaging.type=jar
