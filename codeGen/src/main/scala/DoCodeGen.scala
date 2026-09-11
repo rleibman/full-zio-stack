@@ -11,7 +11,7 @@ object DoCodeGen extends ZIOAppDefault {
 
   override def run = {
     for {
-      _ <- ZIO.succeed(println("Generating code..."))
+      _   <- ZIO.succeed(println("Generating code..."))
       api <- ZIO.acquireReleaseWith(ZIO.attempt(Source.fromFile(File("codeGen/src/main/openapi/simple.json"))))(f => ZIO.attempt(f.close()).orDie) {
         source =>
           ZIO.attempt(

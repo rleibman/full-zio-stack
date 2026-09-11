@@ -54,8 +54,11 @@ dist
 /.bloop/
 /.metals/
 /project/metals.sbt
-/project/.bloop/
+.bloop/
 
 /tree.txt
 /temp
 
+
+# npm / vite
+node_modules

@@ -36,7 +36,7 @@ object FullZIOStackRoutes {
         Method.ANY / "api" ->
           QuickAdapter(interpreter).handlers.api,
         Method.ANY / "api" / "graphiql" ->
-          GraphiQLHandler.handler(apiPath = "/api/dnd5e"),
+          GraphiQLHandler.handler(apiPath = "/api", wsPath = None),
         Method.POST / "api" / "upload" ->
           QuickAdapter(interpreter).handlers.upload,
         Method.GET / "unauth" / "schema" ->

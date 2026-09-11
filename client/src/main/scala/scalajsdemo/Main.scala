@@ -21,13 +21,15 @@
 
 package scalajsdemo
 
+import japgolly.scalajs.react.ReactDOMClient
 import org.scalajs.dom
-import zio.*
 
 object Main {
 
   def main(args: Array[String]): Unit = {
-    ScalaJSDemo().renderIntoDOM(dom.document.getElementById("container"))
+    // React 19 removed ReactDOM.render (renderIntoDOM); roots are created explicitly now.
+    ReactDOMClient.createRoot(dom.document.getElementById("container")).render(ScalaJSDemo())
+    ()
   }
 
 }
