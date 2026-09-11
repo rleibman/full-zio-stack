@@ -21,8 +21,8 @@
 
 package graphql
 
-object Gen extends App {
+object Gen {
 
-  println(FullZIOStackApi.api.render)
+  def main(args: Array[String]): Unit = println(FullZIOStackApi.api.render)
 
 }

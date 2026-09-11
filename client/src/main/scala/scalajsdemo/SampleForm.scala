@@ -70,7 +70,8 @@ object SampleForm {
   private val component = ScalaComponent
     .builder[Props]("SampleForm")
     .initialStateFromProps(p => State(p.name))
-    .renderBackend[Backend]
+    .backend[Backend](Backend(_))
+    .renderPS(_.backend.render(_, _))
     .build
 
   def apply(name: String): Unmounted[Props, State, Backend] = component(Props(name))

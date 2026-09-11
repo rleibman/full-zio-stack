@@ -34,7 +34,7 @@ object QuillDataServices {
     def delete(
       id:         ModelObjectId,
       softDelete: Boolean
-    ): DBIO[Boolean] = ???
+    ):                              DBIO[Boolean] = ???
     def get(id:     ModelObjectId): DBIO[Option[ModelObject]] = ???
     def upsert(obj: ModelObject):   DBIO[ModelObject] = ???
 

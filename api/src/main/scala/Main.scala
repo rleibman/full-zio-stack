@@ -82,10 +82,10 @@ object Main extends ZIOApp {
           .serve(app)
           .zipLeft(ZIO.logDebug(s"Server Started on ${config.http.port}"))
           .tapErrorCause(ZIO.logErrorCause(s"Server on port ${config.http.port} has unexpectedly stopped", _))
-          .provideSome[Environment](serverConfig, Server.live)
+          .provide(serverConfig, Server.live)
           .foldCauseZIO(
-            cause => ZIO.logErrorCause("err when booting server", cause).exitCode,
-            _ => ZIO.logError("app quit unexpectedly...").exitCode
+            cause => ZIO.logErrorCause("err when booting server", cause).as(ExitCode.failure),
+            _ => ZIO.logError("app quit unexpectedly...").as(ExitCode.failure)
           )
       }
     } yield server

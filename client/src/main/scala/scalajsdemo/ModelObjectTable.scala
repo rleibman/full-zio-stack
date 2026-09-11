@@ -58,7 +58,8 @@ object ModelObjectTable {
   private val component = ScalaComponent
     .builder[Unit]("ModelObjectTable")
     .initialState(State(IndexedSeq.empty))
-    .renderBackend[Backend]
+    .backend[Backend](Backend(_))
+    .renderS(_.backend.render(_))
     .componentDidMount(_.backend.init())
     .build
 
