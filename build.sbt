@@ -58,6 +58,9 @@ ThisBuild / libraryDependencySchemes ++= Seq(
 lazy val webDist = TaskKey[File]("webDist")
 lazy val webDebugDist = TaskKey[File]("webDebugDist")
 lazy val calibanRender = TaskKey[Unit]("calibanRender", "Writes the GraphQL schema to src/main/graphql/schema.graphql")
+// Read by IntelliJ's sbt import (not by sbt itself): true keeps a project out of the IDE.
+lazy val ideSkipProject = SettingKey[Boolean]("ideSkipProject").withRank(KeyRanks.Invisible)
+Global / excludeLintKeys += ideSkipProject
 
 lazy val scala3Opts = Seq(
   "-Wconf:msg=Implicit parameters should be provided with a `using` clause:s",
@@ -169,9 +172,45 @@ def dbVariant(
     )
 }
 
-lazy val mariadbLibraries = Seq(mariadbDriver, flywayMysql, testcontainersMariadb)
+/** The variant the servers are built against, and the only one the IDE imports: every variant of a layer shares its source directories, which
+  * IntelliJ can't attribute to more than one module.
+  */
+lazy val defaultDbVariant = ("quill", "mariadb")
 
-lazy val dbQuillMariadb = dbVariant("quill", "mariadb", quill +: mariadbLibraries)
+def db(
+  layer:    String,
+  database: String
+): Project =
+  dbVariant(layer, database, layerLibraries(layer) ++ databaseLibraries(database))
+    .settings(ideSkipProject := (layer, database) != defaultDbVariant)
+
+lazy val dbQuillMariadb = db("quill", "mariadb")
+lazy val dbQuillMysql = db("quill", "mysql")
+lazy val dbQuillPostgres = db("quill", "postgres")
+lazy val dbQuillSqlite = db("quill", "sqlite")
+lazy val dbDoobieMariadb = db("doobie", "mariadb")
+lazy val dbDoobieMysql = db("doobie", "mysql")
+lazy val dbDoobiePostgres = db("doobie", "postgres")
+lazy val dbDoobieSqlite = db("doobie", "sqlite")
+lazy val dbSlickMariadb = db("slick", "mariadb")
+lazy val dbSlickMysql = db("slick", "mysql")
+lazy val dbSlickPostgres = db("slick", "postgres")
+lazy val dbSlickSqlite = db("slick", "sqlite")
+
+lazy val dbVariants: Seq[ProjectReference] = Seq(
+  dbQuillMariadb,
+  dbQuillMysql,
+  dbQuillPostgres,
+  dbQuillSqlite,
+  dbDoobieMariadb,
+  dbDoobieMysql,
+  dbDoobiePostgres,
+  dbDoobieSqlite,
+  dbSlickMariadb,
+  dbSlickMysql,
+  dbSlickPostgres,
+  dbSlickSqlite
+)
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Server core: config, the GraphQL API and service layer, and the layer wiring. Independent of the HTTP server.
@@ -344,7 +383,7 @@ lazy val client = project
 // Root project
 lazy val root = project
   .in(file("."))
-  .aggregate(modelJVM, modelJS, dbCore, dbQuillMariadb, serverCore, serverZiohttp, client)
+  .aggregate((Seq[ProjectReference](modelJVM, modelJS, dbCore, serverCore, serverZiohttp, client) ++ dbVariants) *)
   .settings(
     name           := "full-zio-stack",
     publish / skip := true,

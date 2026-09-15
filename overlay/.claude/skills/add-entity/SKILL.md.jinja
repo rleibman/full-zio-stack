@@ -43,10 +43,14 @@ Create `Thing.scala` the same way and add its codecs.
   deletes use plain SQL (`sql"DELETE FROM ... WHERE id = ${lift(id)}".as[Delete[T]]`), because Quill's aliased
   `DELETE` isn't accepted by every database.
 {%- elif db_layer == 'doobie' %}
-- doobie: use the `Meta` instances in `db/src/main/scala/{{ pkg }}/db/DoobieMappings.scala`.
+- doobie: `import DoobieMappings.given` for the database-specific `Meta` instances
+  (`db/src/main/scala/{{ pkg }}/db/DoobieMappings.scala`), and declare `Meta`s for the new id and enums next to the
+  queries. Optional search filters are built with `Fragments.whereAndOpt`.
 {%- elif db_layer == 'slick' %}
-- Slick: import the profile from `db/src/main/scala/{{ pkg }}/db/SlickProfile.scala`, and import ZIO members
-  selectively (both export `Tag`).
+- Slick: `import SlickProfile.profile.api.*` and `import SlickProfile.instantColumnType` (by name, so it shadows the
+  profile's own Instant mapping) from `db/src/main/scala/{{ pkg }}/db/SlickProfile.scala`. Import ZIO members
+  selectively (`zio.*` would clash with Slick's `Tag`). Combine DBIO actions with `zip` and map the result in ZIO:
+  `map`/`flatMap` on DBIO need an ExecutionContext.
 {%- endif %}
 
 ## 4. Data service tests: `db/`

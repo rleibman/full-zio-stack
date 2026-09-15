@@ -111,6 +111,15 @@ abstract class DataServiceContractSpec[PK, T, S, Service <: DataService[PK, T, S
           (first.items ++ rest.items).map(idOf).toSet == saved.map(idOf).toSet
         )
       },
+      test("text search ignores case, whatever the database's collation") {
+        for {
+          svc  <- service
+          name <- freshName
+          // Stored in upper case, searched in lower case: only matches if the column is compared case-insensitively.
+          saved <- svc.upsert(newEntity(name.toUpperCase))
+          found <- svc.search(searchText(name))
+        } yield assertTrue(found.items.map(idOf) == Seq(idOf(saved)))
+      },
       test("soft delete hides the entity from search, but get still returns it, flagged") {
         for {
           svc      <- service

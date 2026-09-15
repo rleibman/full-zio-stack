@@ -72,7 +72,7 @@ In the generated directory:
 2. Full-stack only: `cd stLib && npm install && sbt --error publishLocal`. The first run takes about 5–6 minutes and
    up to 6 GB of memory, so run it in the background.
 3. If `docker-compose.yml` exists: `docker compose up -d`, then wait until the database is healthy.
-4. `sbt --error test`.
+4. `sbt --error testFull` (plain `test` is incremental in sbt 2 and may skip tests).
 5. Start `sbt server/run` in the background, then check `curl -fsS localhost:<http_port>/health` and one GraphQL
    query (`curl -fsS -H 'Content-Type: application/json' -d '{"query":"{ __typename }"}' localhost:<http_port>/api/graphql`).
    Stop the server afterwards.

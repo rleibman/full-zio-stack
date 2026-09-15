@@ -42,7 +42,7 @@ Always use `sbt --error …` to keep output short; drop `--error` only when you 
 {%- if dev_compose %}
 | Start the dev database | `docker compose up -d` |
 {%- endif %}
-| Run all tests | `sbt --error test` |
+| Run tests | `sbt --error test`: incremental in sbt 2, so it only reruns tests whose code changed. `sbt --error testFull` runs everything |
 | Run the server | `sbt server/run` (config: `server/src/main/resources/application.conf`, override with `-Dconfig.file=…`) |
 | Regenerate the GraphQL schema file | `sbt server/calibanRender`, which writes `server/src/main/graphql/schema.graphql` |
 {%- if components == 'full-stack' %}
@@ -94,6 +94,8 @@ Always use `sbt --error …` to keep output short; drop `--error` only when you 
 {%- endif %}
 {%- if db_layer == 'slick' %}
 - Slick's `api.*` and `zio.*` both export `Tag`. In Slick files, import ZIO members selectively (`import zio.{RIO, ZIO}`).
+- Slick: always `import SlickProfile.instantColumnType` by name next to `SlickProfile.profile.api.*`. Slick's own
+  Instant mapping differs per profile (MySQL writes a VARCHAR), and the named import shadows it.
 {%- endif %}
 {%- if db_layer == 'doobie' %}
 - doobie time mappings live in `db/src/main/scala/{{ pkg }}/db/DoobieMappings.scala`. Use its `Meta` instances,

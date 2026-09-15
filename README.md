@@ -16,8 +16,9 @@ One of the most difficult thing in our field is to be able to choose a set of te
 #### zio-json
 #### quill
 The default database layer (quill-jdbc-zio): queries are checked and turned into SQL at compile time.
-#### doobie, Slick (coming as template choices)
-Not strictly zio, but with the cats zio interop, it's super easy to combine
+#### doobie, Slick
+The alternative database layers (template choices). doobie isn't strictly zio, but with the cats zio interop, it's
+super easy to combine.
 
 ### Non-ZIO tech
 #### scala.js (https://www.scala-js.org/)
@@ -44,8 +45,9 @@ come from ScalablyTyped; `client/.../components/MuiExtensions.scala` fills the f
 Alternatives: https://react-bootstrap.github.io/
 
 #### MariaDB / MySQL / Postgres / SQLite
-MariaDB is the default. The schema lives in Flyway migrations (`db-core/src/main/resources/db/migration/<database>/`),
-applied when the server starts, so switching databases is a matter of choosing a different set of migrations and driver.
+MariaDB is the default. The schema lives in Flyway migrations (`db-core/src/main/resources/db/migration/<database>/`,
+where MariaDB and MySQL share `mysql`), applied when the server starts. SQLite stores timestamps as integer epoch
+milliseconds and supports only limited `ALTER TABLE`, which matters when you write later migrations.
 
 ## Status: becoming a template
 
@@ -59,7 +61,7 @@ stack, with a choice of HTTP server, database and database layer. Until that's r
 |---|---|
 | `model/` | Domain types shared by the server and the client (cross-built for the JVM and Scala.js) |
 | `db-core/` | The `DataService` traits and errors, an in-memory mock, the pooled `DataSource` + Flyway, the migrations, and the contract test suites every database layer must pass |
-| `db-quill/` | The Quill implementation. It is built once per database as `db-quill-<database>`: shared code in `src/main/scala`, the database-specific Quill context in `src/main-<database>/scala` |
+| `db-quill/`, `db-doobie/`, `db-slick/` | The three database layers. Each is built once per database as `db-<layer>-<database>` (mariadb, mysql, postgres, sqlite): shared code in `src/main/scala`, the database-specific bits (Quill context, doobie mappings, Slick profile) in `src/main-<database>/scala`. The server uses `db-quill-mariadb`; every variant passes the same contract tests |
 | `server-core/` | Configuration, the Caliban GraphQL API and its service layer, and the layer wiring (`AppLayers`). Independent of the HTTP server |
 | `server-ziohttp/` | The zio-http server: GraphQL at `/api/graphql`, GraphiQL at `/api/graphiql`, `/health`, and the client's static files |
 | `client/` | Scala.js + scalajs-react + Material UI, bundled with vite. Talks to the server with a GraphQL client generated from the server's schema |
@@ -101,7 +103,8 @@ The client's GraphQL code is generated from `server-core/src/main/graphql/schema
 
 ## Testing
 ```bash
-sbt test
+sbt test       # incremental in sbt 2: reruns only the tests whose code changed
+sbt testFull   # everything
 ```
 - `DataServiceContractSpec` defines what every data service must do. It runs against the in-memory mock and, through
   Testcontainers, against a real database for each database layer (Docker required).

@@ -25,6 +25,7 @@ import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
 import org.flywaydb.core.Flyway
 import zio.*
 
+import java.nio.file.{Files, Path}
 import javax.sql.DataSource
 
 case class DatabaseConfig(
@@ -36,7 +37,9 @@ case class DatabaseConfig(
   maximumPoolSize:         Int = 10,
   minimumIdle:             Int = 1,
   connectionTimeoutMillis: Long = 30000,
-  /** SQL run on every new connection (SQLite uses it for its pragmas). */
+  /** SQL run on every new connection. (SQLite takes its pragmas as URL parameters instead, e.g.
+    * `jdbc:sqlite:data/app.db?journal_mode=WAL&busy_timeout=5000`.)
+    */
   connectionInitSql: Option[String] = None
 )
 
@@ -46,10 +49,19 @@ object DataSources {
   val live: RLayer[DatabaseConfig, DataSource] = ZLayer.scoped {
     for {
       config     <- ZIO.service[DatabaseConfig]
+      _          <- ZIO.attemptBlocking(createSqliteDirectory(config.url))
       dataSource <- ZIO.acquireRelease(ZIO.attemptBlocking(hikari(config)))(ds => ZIO.attemptBlocking(ds.close()).orDie)
       _          <- migrate(config, dataSource)
     } yield dataSource
   }
+
+  /** SQLite creates the database file on first use, but not the directory it lives in. */
+  private def createSqliteDirectory(url: String): Unit =
+    if (url.startsWith("jdbc:sqlite:")) {
+      val file = url.stripPrefix("jdbc:sqlite:").takeWhile(_ != '?')
+      if (file.nonEmpty && !file.startsWith(":memory:"))
+        Option(Path.of(file).nn.toAbsolutePath.nn.getParent).foreach(directory => Files.createDirectories(directory))
+    }
 
   private def hikari(config: DatabaseConfig): HikariDataSource = {
     val hikariConfig = HikariConfig()
