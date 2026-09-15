@@ -59,11 +59,11 @@ stack, with a choice of HTTP server, database and database layer. Until that's r
 
 | Module | What it is |
 |---|---|
-| `model/` | Domain types shared by the server and the client (cross-built for the JVM and Scala.js) |
-| `db-core/` | The `DataService` traits and errors, an in-memory mock, the pooled `DataSource` + Flyway, the migrations, and the contract test suites every database layer must pass |
+| `model/` | Domain types shared by the server and the client (cross-built for the JVM and Scala.js), and the repository contract: `Repository[F[_]]`, one `...Operations[F]` per entity, and `RepositoryError`. The server implements it with ZIO, the client with `AsyncCallback` |
+| `db-core/` | `ZIORepository` (= `Repository[DataIO]`), the in-memory `MockRepository`, the pooled `DataSource` + Flyway, the migrations, and the contract test suites every database layer must pass |
 | `db-quill/`, `db-doobie/`, `db-slick/` | The three database layers. Each is built once per database as `db-<layer>-<database>` (mariadb, mysql, postgres, sqlite): shared code in `src/main/scala`, the database-specific bits (Quill context, doobie mappings, Slick profile) in `src/main-<database>/scala`. The server uses `db-quill-mariadb`; every variant passes the same contract tests |
-| `server-core/` | Configuration, the Caliban GraphQL API and its service layer, and the layer wiring (`AppLayers`). Independent of the HTTP server |
-| `server-ziohttp/` | The zio-http server: GraphQL at `/api/graphql`, GraphiQL at `/api/graphiql`, `/health`, and the client's static files |
+| `server-core/` | Configuration, the Caliban GraphQL API (resolved directly against the repository), and the layer wiring (`AppLayers`). Independent of the HTTP server |
+| `server-ziohttp/`, `server-http4s/` | The two HTTP servers (zio-http, and http4s/ember through zio-interop-cats): GraphQL at `/api/graphql`, GraphiQL at `/api/graphiql`, `/health`, and the client's static files. Both pass the same contract tests |
 | `client/` | Scala.js + scalajs-react + Material UI, bundled with vite. Talks to the server with a GraphQL client generated from the server's schema |
 | `stLib/` | A standalone sbt build that generates the ScalablyTyped facades (React, MUI) |
 
@@ -88,7 +88,7 @@ The first run takes several minutes and several GB of memory.
 ```bash
 docker compose up -d                                   # MariaDB on localhost:13306, matching application.conf
 sbt client/webDebugDist                                # builds the client into ./debugDist
-STATIC_CONTENT_DIR=debugDist sbt server-ziohttp/run    # http://localhost:8080
+STATIC_CONTENT_DIR=debugDist sbt server-ziohttp/run    # http://localhost:8080 (or server-http4s/run)
 ```
 Flyway creates the tables on startup. GraphiQL is at http://localhost:8080/api/graphiql.
 
@@ -106,7 +106,7 @@ The client's GraphQL code is generated from `server-core/src/main/graphql/schema
 sbt test       # incremental in sbt 2: reruns only the tests whose code changed
 sbt testFull   # everything
 ```
-- `DataServiceContractSpec` defines what every data service must do. It runs against the in-memory mock and, through
+- `CRUDOperationsContract` defines what every entity's operations must do. It runs against the in-memory mock and, through
   Testcontainers, against a real database for each database layer (Docker required).
 - `ServerContractSpec` starts the HTTP server on a random port and checks it over real HTTP: health, GraphQL queries,
   mutations and error codes, GraphiQL, static files, client-side-route fallback, and path traversal.

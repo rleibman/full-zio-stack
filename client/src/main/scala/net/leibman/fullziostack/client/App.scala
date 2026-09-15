@@ -23,32 +23,57 @@ package net.leibman.fullziostack.client
 
 import japgolly.scalajs.react.*
 import japgolly.scalajs.react.vdom.html_<^.*
-import net.leibman.fullziostack.client.api.ModelObjectApi
 import net.leibman.fullziostack.client.components.MuiExtensions.*
 import net.leibman.fullziostack.client.pages.ModelObjectPage
-import net.leibman.fullziostack.st.muiMaterial.components.{AppBar, Box, Container, CssBaseline, ThemeProvider, Toolbar, Typography}
+import net.leibman.fullziostack.st.muiMaterial.components.{AppBar, Box, Container, CssBaseline, Tab, Tabs, ThemeProvider, Toolbar, Typography}
 import net.leibman.fullziostack.st.muiMaterial.muiMaterialStrings as MuiStrings
 import net.leibman.fullziostack.st.muiSystem.muiSystemStrings as SystemStrings
 
 import scala.scalajs.js
 
-/** The application shell: theme, top bar, and the page. Add navigation here when there's more than one page. */
+/** The application shell: theme, a top bar with a tab per page, and the selected page. */
 object App {
+
+  /** The pages, in tab order. Add new pages here. */
+  private val pages: Seq[(String, () => VdomElement)] = Seq(
+    "Model objects" -> (() => ModelObjectPage())
+  )
 
   private val component = ScalaFnComponent[Unit] { _ =>
     for {
+      page    <- useState(0)
       version <- useState("")
-      _ <- useEffectOnMount(ModelObjectApi.version.flatMap(v => version.setState(v).asAsyncCallback).handleError(_ => AsyncCallback.unit).toCallback)
+      _       <- useEffectOnMount(
+        FullZIOStackClientRepository.version.flatMap(v => version.setState(v).asAsyncCallback).handleError(_ => AsyncCallback.unit).toCallback
+      )
     } yield ThemeProvider(Theme.theme)(
       CssBaseline(),
       AppBar.position(MuiStrings.static)(
         Toolbar()(
-          Typography.variant(MuiStrings.h6).sxStyle(js.Dynamic.literal(flexGrow = 1))("Full ZIO Stack"),
+          Typography.variant(MuiStrings.h6).sxStyle(js.Dynamic.literal(mr = 4))("Full ZIO Stack"),
+          Tabs
+            .value(page.value)
+            .textColor(MuiStrings.inherit)
+            .indicatorColor(MuiStrings.secondary)
+            .sxStyle(js.Dynamic.literal(flexGrow = 1))
+            .onChange(
+              (
+                _,
+                selected
+              ) => page.setState(selected.asInstanceOf[Int])
+            )(
+              pages.map(
+                (
+                  label,
+                  _
+                ) => Tab().label(label).withKey(label).build
+              )*
+            ),
           Typography.variant(MuiStrings.caption)(version.value)
         )
       ),
       Container.maxWidth(SystemStrings.lg)(
-        Box().sxStyle(js.Dynamic.literal(py = 3))(ModelObjectPage())
+        Box().sxStyle(js.Dynamic.literal(py = 3))(pages(page.value)._2())
       )
     )
   }

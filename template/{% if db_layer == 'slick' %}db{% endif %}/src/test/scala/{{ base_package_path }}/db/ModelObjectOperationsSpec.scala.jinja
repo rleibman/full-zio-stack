@@ -1,0 +1,10 @@
+package {{ base_package }}.db
+
+import zio.*
+
+/** Runs the ModelObject contract against the real database (see TestDatabase). */
+object ModelObjectOperationsSpec extends ModelObjectOperationsContract {
+
+  override val bootstrap: TaskLayer[ZIORepository] = TestDatabase.dataSource >>> ZIORepository.live
+
+}

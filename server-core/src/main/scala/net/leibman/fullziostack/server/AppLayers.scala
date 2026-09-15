@@ -22,33 +22,26 @@
 package net.leibman.fullziostack.server
 
 import net.leibman.fullziostack.config.AppConfig
-import net.leibman.fullziostack.db.{DataLayer, DataSources, MockModelObjectDataService}
-import net.leibman.fullziostack.graphql.FullZIOStackService
+import net.leibman.fullziostack.db.{DataSources, MockRepository, ZIORepository}
 import zio.*
 import zio.logging.backend.SLF4J
 
-/** How the application is wired, independent of the HTTP server. Add new services here. */
+/** How the application is wired, independent of the HTTP server. */
 object AppLayers {
 
   /** Everything the HTTP servers need. */
-  type AppEnvironment = AppConfig & FullZIOStackService
+  type AppEnvironment = AppConfig & ZIORepository
 
-  /** Config → DataSource (pooled, migrated, closed on shutdown) → data services → business services. */
+  /** Config → DataSource (pooled, migrated, closed on shutdown) → repository. */
   val live: TaskLayer[AppEnvironment] = ZLayer.make[AppEnvironment](
     AppConfig.live,
     AppConfig.database,
     DataSources.live,
-    DataLayer.live,
-    FullZIOStackService.live
+    ZIORepository.live
   )
 
-  /** The same services over in-memory data: for tests, or for running without a database. */
-  def mock(config: AppConfig): ULayer[AppEnvironment] =
-    ZLayer.make[AppEnvironment](
-      ZLayer.succeed(config),
-      MockModelObjectDataService.layer,
-      FullZIOStackService.live
-    )
+  /** The same, over in-memory data: for tests, or for running without a database. */
+  def mock(config: AppConfig): ULayer[AppEnvironment] = ZLayer.succeed(config) ++ MockRepository.live
 
   /** Sends ZIO's log output through SLF4J (configured by logback.xml). */
   val logging: ZLayer[Any, Nothing, Unit] = Runtime.removeDefaultLoggers >>> SLF4J.slf4j

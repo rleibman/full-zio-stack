@@ -1,0 +1,95 @@
+package {{ base_package }}.db
+
+import {{ base_package }}.db.SlickProfile.instantColumnType
+import {{ base_package }}.db.SlickProfile.profile.api.*
+import {{ base_package }}.model.*
+import {{ base_package }}.repository.Repository.ModelObjectOperations
+import {{ base_package }}.repository.RepositoryError
+// Selectively: zio.* would clash with Slick's Tag.
+import zio.{Clock, ZIO}
+
+import java.time.Instant
+import java.time.temporal.ChronoUnit
+
+final case class SlickModelObjectOperations(database: Database) extends ModelObjectOperations[DataIO] {
+
+  private given BaseColumnType[ModelObjectId] = MappedColumnType.base[ModelObjectId, Int](_.value, ModelObjectId.apply)
+  private given BaseColumnType[ModelObjectType] = MappedColumnType.base[ModelObjectType, String](_.toString, ModelObjectType.valueOf)
+
+  private class ModelObjects(tag: Tag) extends Table[ModelObject](tag, "model_object") {
+
+    def id = column[ModelObjectId]("id", O.PrimaryKey, O.AutoInc)
+    def name = column[String]("name")
+    def description = column[String]("description")
+    def modelObjectType = column[ModelObjectType]("model_object_type")
+    def deleted = column[Boolean]("deleted")
+    def created = column[Instant]("created")
+    def lastUpdated = column[Instant]("last_updated")
+    def * = (id, name, description, modelObjectType, deleted, created, lastUpdated).mapTo[ModelObject]
+
+  }
+
+  private val modelObjects = TableQuery[ModelObjects]
+
+  private val now = Clock.instant.map(_.truncatedTo(ChronoUnit.MILLIS))
+
+  private def execute[A](action: DBIO[A]): DataIO[A] =
+    ZIO.fromFuture(_ => database.run(action)).mapError(RepositoryErrors.fromThrowable)
+
+  private def byId(id: ModelObjectId) = modelObjects.filter(_.id === id)
+
+  override def search(search: ModelObjectSearch): DataIO[Page[ModelObject]] = {
+    val pattern = search.text.map(text => s"%${text.toLowerCase}%")
+    val matching = modelObjects
+      .filterIf(!search.includeDeleted)(o => !o.deleted)
+      .filterOpt(pattern)(
+        (
+          o,
+          p
+        ) => o.name.toLowerCase.like(p) || o.description.toLowerCase.like(p)
+      )
+      .filterOpt(search.modelObjectType)(
+        (
+          o,
+          modelObjectType
+        ) => o.modelObjectType === modelObjectType
+      )
+    // zip rather than flatMap: DBIO's map/flatMap need an ExecutionContext, and ZIO does the mapping instead.
+    execute(matching.sortBy(_.id).drop(search.offset).take(search.limit).result.zip(matching.length.result))
+      .map(
+        (
+          items,
+          total
+        ) => Page(items, total.toLong)
+      )
+  }
+
+  override def get(id: ModelObjectId): DataIO[Option[ModelObject]] = execute(byId(id).result.headOption)
+
+  override def upsert(entity: ModelObject): DataIO[ModelObject] =
+    now.flatMap { timestamp =>
+      if (entity.id == ModelObjectId.empty) {
+        val row = entity.copy(created = timestamp, lastUpdated = timestamp)
+        execute((modelObjects returning modelObjects.map(_.id)) += row).map(id => row.copy(id = id))
+      } else {
+        for {
+          updated <- execute(
+            byId(entity.id)
+              .map(o => (o.name, o.description, o.modelObjectType, o.deleted, o.lastUpdated))
+              .update((entity.name, entity.description, entity.modelObjectType, entity.deleted, timestamp))
+          )
+          _     <- ZIO.fail(RepositoryError.NotFound(s"ModelObject ${entity.id.value} not found")).when(updated == 0)
+          saved <- get(entity.id).someOrFail(RepositoryError.NotFound(s"ModelObject ${entity.id.value} not found"))
+        } yield saved
+      }
+    }
+
+  override def delete(
+    id:         ModelObjectId,
+    softDelete: Boolean
+  ): DataIO[Boolean] =
+    if (softDelete)
+      now.flatMap(timestamp => execute(byId(id).map(o => (o.deleted, o.lastUpdated)).update((true, timestamp)))).map(_ > 0)
+    else execute(byId(id).delete).map(_ > 0)
+
+}

@@ -1,0 +1,38 @@
+{%- set url = {
+  'mariadb': 'jdbc:mariadb://localhost:' ~ db_port ~ '/' ~ db_name,
+  'mysql': 'jdbc:mysql://localhost:' ~ db_port ~ '/' ~ db_name ~ '?allowPublicKeyRetrieval=true&useSSL=false',
+  'postgres': 'jdbc:postgresql://localhost:' ~ db_port ~ '/' ~ db_name,
+  'sqlite': 'jdbc:sqlite:' ~ sqlite_file ~ '?journal_mode=WAL&busy_timeout=5000',
+}[database] -%}
+# Every value can be overridden by the environment variable next to it, or the whole file with -Dconfig.file=...
+app {
+  http {
+    host = "0.0.0.0"
+    host = ${?HTTP_HOST}
+    port = {{ http_port }}
+    port = ${?HTTP_PORT}
+    # The built client: dist (sbt client/webDist) or debugDist (sbt client/webDebugDist), relative to the working
+    # directory.
+    staticContentDir = "dist"
+    staticContentDir = ${?STATIC_CONTENT_DIR}
+  }
+
+  db {
+{%- if database == 'sqlite' %}
+    # WAL lets readers work while the (single) writer writes; busy_timeout waits for locks instead of failing.
+    url = "{{ url }}"
+    url = ${?DB_URL}
+    # SQLite allows one writer at a time.
+    maximumPoolSize = 1
+{%- else %}
+    # Development defaults, matching {% if dev_compose %}docker-compose.yml{% else %}your local database{% endif %}. Set DB_URL, DB_USER and DB_PASSWORD elsewhere.
+    url = "{{ url }}"
+    url = ${?DB_URL}
+    user = "{{ db_user }}"
+    user = ${?DB_USER}
+    password = "{{ db_user }}"
+    password = ${?DB_PASSWORD}
+{%- endif %}
+    migrationsLocation = "classpath:db/migration/{{ migration_dir }}"
+  }
+}

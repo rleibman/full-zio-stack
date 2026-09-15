@@ -1,0 +1,7 @@
+package {{ base_package }}.model
+
+/** One page of search results, plus the number of results across all pages. */
+case class Page[T](
+  items: Seq[T],
+  total: Long
+)

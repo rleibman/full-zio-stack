@@ -23,25 +23,71 @@ package net.leibman.fullziostack.graphql
 
 import caliban.*
 import caliban.CalibanError.ExecutionError
+import caliban.ResponseValue.ObjectValue
+import caliban.Value.StringValue
 import caliban.schema.*
 import caliban.schema.Annotations.GQLDescription
 import caliban.schema.ArgBuilder.auto.*
 import caliban.wrappers.Wrappers.*
+import net.leibman.fullziostack.db.{DataIO, ZIORepository}
 import net.leibman.fullziostack.model.*
+import net.leibman.fullziostack.repository.RepositoryError
 import net.leibman.fullziostack.server.BuildInfo
 import zio.*
 
 import scala.language.postfixOps
 
-/** The GraphQL API. After changing it, run `calibanRender` to update the committed schema.graphql, which the client's generated code is built from
-  * (SchemaSpec fails until you do).
+/** The GraphQL API, resolved directly against the [[ZIORepository]]. After changing it, run `calibanRender` to update the committed schema.graphql,
+  * which the client's generated code is built from (SchemaSpec fails until you do).
+  *
+  * Failures are Caliban errors whose `extensions.code` is an [[ErrorCode]], so clients can tell them apart.
   */
 object FullZIOStackApi {
 
-  type Op[A] = ZIO[FullZIOStackService, ExecutionError, A]
+  type Op[A] = ZIO[ZIORepository, ExecutionError, A]
 
-  /** Derives schemas for types whose fields need FullZIOStackService (Schema.auto only covers Any). */
-  object ApiSchema extends GenericSchema[FullZIOStackService]
+  enum ErrorCode {
+
+    case BAD_USER_INPUT, NOT_FOUND, CONFLICT, UNAVAILABLE, INTERNAL
+
+  }
+
+  def error(
+    code:    ErrorCode,
+    message: String,
+    cause:   Option[Throwable] = None
+  ): ExecutionError =
+    ExecutionError(
+      message,
+      innerThrowable = cause,
+      extensions = Some(ObjectValue(List("code" -> StringValue(code.toString))))
+    )
+
+  /** Expected failures become errors the client can act on. Unexpected ones are logged here and reported without details, so no internals leak to
+    * clients.
+    */
+  private def toExecutionError(e: RepositoryError): UIO[ExecutionError] =
+    e match {
+      case RepositoryError.NotFound(message)    => ZIO.succeed(error(ErrorCode.NOT_FOUND, message))
+      case RepositoryError.Invalid(message)     => ZIO.succeed(error(ErrorCode.BAD_USER_INPUT, message))
+      case RepositoryError.Conflict(message, _) => ZIO.succeed(error(ErrorCode.CONFLICT, message))
+      case e: RepositoryError.Transient =>
+        ZIO
+          .logWarningCause("Transient repository error", Cause.fail(e)).as(
+            error(ErrorCode.UNAVAILABLE, "Temporarily unavailable, try again", Some(e))
+          )
+      case e: RepositoryError.Unexpected =>
+        ZIO.logErrorCause("Unexpected repository error", Cause.fail(e)).as(error(ErrorCode.INTERNAL, "Internal error", Some(e)))
+    }
+
+  /** Runs a repository operation, turning its failures into API errors. */
+  private def withRepository[A](operation: ZIORepository => DataIO[A]): Op[A] =
+    ZIO.serviceWithZIO[ZIORepository](operation).flatMapError(toExecutionError)
+
+  private def invalid(message: String): Op[Nothing] = ZIO.fail(error(ErrorCode.BAD_USER_INPUT, message))
+
+  /** Derives schemas for types whose fields need the repository (Schema.auto only covers Any). */
+  object ApiSchema extends GenericSchema[ZIORepository]
   import ApiSchema.auto.*
 
   case class ModelObjectArgs(id: ModelObjectId)
@@ -73,21 +119,26 @@ object FullZIOStackApi {
 
   given Schema[Any, ModelObjectId] = Schema.intSchema.contramap(_.value)
   given ArgBuilder[ModelObjectId] = ArgBuilder.int.map(ModelObjectId.apply)
-  // Explicit, so graphQL(...) below is typed for FullZIOStackService instead of inferring Any.
-  given Schema[FullZIOStackService, Queries] = ApiSchema.gen[FullZIOStackService, Queries]
-  given Schema[FullZIOStackService, Mutations] = ApiSchema.gen[FullZIOStackService, Mutations]
+  // Explicit, so graphQL(...) below is typed for ZIORepository instead of inferring Any.
+  given Schema[ZIORepository, Queries] = ApiSchema.gen[ZIORepository, Queries]
+  given Schema[ZIORepository, Mutations] = ApiSchema.gen[ZIORepository, Mutations]
 
-  lazy val api: GraphQL[FullZIOStackService] =
+  lazy val api: GraphQL[ZIORepository] =
     graphQL(
       RootResolver(
         Queries(
-          modelObjects = args => ZIO.serviceWithZIO[FullZIOStackService](_.modelObjects(args.search)),
-          modelObject = args => ZIO.serviceWithZIO[FullZIOStackService](_.modelObject(args.id)),
+          modelObjects = args =>
+            if (args.search.limit < 1 || args.search.limit > 500 || args.search.offset < 0)
+              invalid("offset must be >= 0 and limit between 1 and 500")
+            else withRepository(_.modelObjectOps.search(args.search)),
+          modelObject = args => withRepository(_.modelObjectOps.get(args.id)),
           version = BuildInfo.version
         ),
         Mutations(
-          upsertModelObject = args => ZIO.serviceWithZIO[FullZIOStackService](_.upsertModelObject(args.modelObject)),
-          deleteModelObject = args => ZIO.serviceWithZIO[FullZIOStackService](_.deleteModelObject(args.id, args.softDelete))
+          upsertModelObject = args =>
+            if (args.modelObject.name.isBlank) invalid("name must not be blank")
+            else withRepository(_.modelObjectOps.upsert(args.modelObject.copy(name = args.modelObject.name.trim.nn))),
+          deleteModelObject = args => withRepository(_.modelObjectOps.delete(args.id, args.softDelete))
         )
       )
     ) @@ maxFields(200) // query analyzer that limit query fields

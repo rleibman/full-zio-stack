@@ -113,7 +113,10 @@ lazy val modelJVM = model.jvm
 lazy val modelJS = model.js
 
 lazy val model = crossProject(JSPlatform, JVMPlatform)
-  .enablePlugins(AutomateHeaderPlugin, com.github.sbt.git.GitVersioning)
+  .enablePlugins(com.github.sbt.git.GitVersioning)
+  // Headers from the JVM side only: both sides compile the same shared sources, and two projects adding a header to
+  // the same file at once corrupt it.
+  .jvmConfigure(_.enablePlugins(AutomateHeaderPlugin))
   .settings(
     name := "full-zio-stack-model",
     commonSettings,
@@ -128,6 +131,7 @@ lazy val model = crossProject(JSPlatform, JVMPlatform)
 // database. Its tests hold the contract suites that every DB layer runs.
 lazy val dbCore = project
   .in(file("db-core"))
+  .withId("db-core")
   .enablePlugins(AutomateHeaderPlugin, com.github.sbt.git.GitVersioning)
   .dependsOn(modelJVM)
   .settings(
@@ -152,7 +156,11 @@ def dbVariant(
   libraries: Seq[ModuleID]
 ): Project = {
   Project(s"db-$layer-$database", file(s"db-$layer") / ".variants" / database)
-    .enablePlugins(AutomateHeaderPlugin, com.github.sbt.git.GitVersioning)
+    .enablePlugins(com.github.sbt.git.GitVersioning)
+    // The variants of a layer share its source directories, and several projects adding a header to the same file at
+    // once corrupt it, so only the MariaDB variant adds headers. (Files in the other databases' src/main-<database>
+    // directories don't get one automatically.)
+    .enablePlugins((if (database == "mariadb") Seq(AutomateHeaderPlugin) else Seq.empty) *)
     .dependsOn(dbCore % "compile->compile;test->test")
     .settings(
       name := s"full-zio-stack-db-$layer-$database",
@@ -217,6 +225,7 @@ lazy val dbVariants: Seq[ProjectReference] = Seq(
 // Depends on the default DB variant so the app runs; the others are proven by their own contract tests.
 lazy val serverCore = project
   .in(file("server-core"))
+  .withId("server-core")
   .enablePlugins(AutomateHeaderPlugin, com.github.sbt.git.GitVersioning, BuildInfoPlugin)
   .dependsOn(modelJVM, dbCore % "compile->compile;test->test", dbQuillMariadb)
   .settings(
@@ -236,27 +245,30 @@ lazy val serverCore = project
   )
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
-// HTTP servers. Each provides …server.Main.
-lazy val serverZiohttp = project
-  .in(file("server-ziohttp"))
-  .enablePlugins(
-    AutomateHeaderPlugin,
-    com.github.sbt.git.GitVersioning,
-    LinuxPlugin,
-    JavaServerAppPackaging,
-    SystemloaderPlugin,
-    SystemdPlugin
-  )
-  .dependsOn(serverCore % "compile->compile;test->test")
-  .settings(
-    name := "full-zio-stack-server",
-    commonSettings,
-    testSettings,
-    libraryDependencies ++= Seq(zioHttp, calibanQuick),
-    // Run from the repository root, so the relative staticContentDir (dist/ or debugDist/) resolves.
-    run / fork          := true,
-    run / baseDirectory := (ThisBuild / baseDirectory).value
-  )
+// HTTP servers. Each provides …server.Main with the same startServer, and passes ServerContractSpec.
+def httpServer(server: String): Project =
+  Project(s"server-${server.replace("-", "")}", file(s"server-${server.replace("-", "")}"))
+    .enablePlugins(
+      AutomateHeaderPlugin,
+      com.github.sbt.git.GitVersioning,
+      LinuxPlugin,
+      JavaServerAppPackaging,
+      SystemloaderPlugin,
+      SystemdPlugin
+    )
+    .dependsOn(serverCore % "compile->compile;test->test")
+    .settings(
+      name := s"full-zio-stack-server-${server.replace("-", "")}",
+      commonSettings,
+      testSettings,
+      libraryDependencies ++= serverLibraries(server),
+      // Run from the repository root, so the relative staticContentDir (dist/ or debugDist/) resolves.
+      run / fork          := true,
+      run / baseDirectory := (ThisBuild / baseDirectory).value
+    )
+
+lazy val serverZiohttp = httpServer("zio-http")
+lazy val serverHttp4s = httpServer("http4s")
 
 ////////////////////////////////////////////////////////////////////////////////////
 // Web
@@ -380,10 +392,22 @@ lazy val client = project
   )
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
+// Everything but the client, which needs the ScalablyTyped facades from stLib/ (built with a locally published
+// converter that CI doesn't have).
+addCommandAlias(
+  "testServerSide",
+  (Seq("modelJVM", "db-core", "server-core", "server-ziohttp", "server-http4s") ++
+    (for {
+      layer    <- Seq("quill", "doobie", "slick")
+      database <- Seq("mariadb", "mysql", "postgres", "sqlite")
+    } yield s"db-$layer-$database")).map(project => s"$project/testFull").mkString("; ", "; ", ""),
+)
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
 // Root project
 lazy val root = project
   .in(file("."))
-  .aggregate((Seq[ProjectReference](modelJVM, modelJS, dbCore, serverCore, serverZiohttp, client) ++ dbVariants) *)
+  .aggregate((Seq[ProjectReference](modelJVM, modelJS, dbCore, serverCore, serverZiohttp, serverHttp4s, client) ++ dbVariants) *)
   .settings(
     name           := "full-zio-stack",
     publish / skip := true,

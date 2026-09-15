@@ -49,9 +49,10 @@ abstract class ServerContractSpec extends ZIOSpecDefault {
     body:   String
   )
 
-  case class Server(port: Int) {
-
-    private val client = HttpClient.newHttpClient().nn
+  case class Server(
+    port:   Int,
+    client: HttpClient
+  ) {
 
     private def send(request: HttpRequest.Builder): Task[Response] =
       ZIO
@@ -109,7 +110,14 @@ abstract class ServerContractSpec extends ZIOSpecDefault {
         http = HttpConfig(host = "127.0.0.1", port = 0, staticContentDir = static.get.toString),
         db = DatabaseConfig(url = "unused", migrationsLocation = "unused")
       )
-      AppLayers.mock(config) >>> ZLayer.scoped(startServer.map(Server.apply))
+      // The client is released before the server, so no idle keep-alive connection holds up the server's graceful
+      // shutdown.
+      AppLayers.mock(config) >>> ZLayer.scoped(
+        for {
+          port   <- startServer
+          client <- ZIO.acquireRelease(ZIO.succeed(HttpClient.newHttpClient().nn))(client => ZIO.succeed(client.shutdownNow()))
+        } yield Server(port, client)
+      )
     }
 
   private val upsert =

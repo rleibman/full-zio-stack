@@ -23,7 +23,7 @@ package net.leibman.fullziostack.client.pages
 
 import japgolly.scalajs.react.*
 import japgolly.scalajs.react.vdom.html_<^.*
-import net.leibman.fullziostack.client.api.ModelObjectApi
+import net.leibman.fullziostack.client.FullZIOStackClientRepository
 import net.leibman.fullziostack.client.components.MuiExtensions.*
 import net.leibman.fullziostack.client.components.OutlinedSelect
 import net.leibman.fullziostack.model.*
@@ -99,7 +99,7 @@ object ModelObjectPage {
       deleting <- useState(Option.empty[ModelObject])
       _        <- useEffectWithDeps(query.value) { q =>
         (loading.setState(true).asAsyncCallback >>
-          ModelObjectApi.search(q.search).flatMap(page => results.setState(page).asAsyncCallback))
+          FullZIOStackClientRepository.modelObjectOps.search(q.search).flatMap(page => results.setState(page).asAsyncCallback))
           .handleError(e => error.setState(Some(e.getMessage)).asAsyncCallback)
           .finallyRun(loading.setState(false).asAsyncCallback)
           .toCallback
@@ -108,13 +108,15 @@ object ModelObjectPage {
       val reload: Callback = query.modState(q => q.copy(revision = q.revision + 1))
 
       def save(obj: ModelObject): Callback =
-        (saving.setState(true).asAsyncCallback >> ModelObjectApi.upsert(obj) >> (editing.setState(None) >> reload).asAsyncCallback)
+        (saving.setState(true).asAsyncCallback >> FullZIOStackClientRepository.modelObjectOps.upsert(obj) >> (editing.setState(
+          None
+        ) >> reload).asAsyncCallback)
           .handleError(e => error.setState(Some(e.getMessage)).asAsyncCallback)
           .finallyRun(saving.setState(false).asAsyncCallback)
           .toCallback
 
       def delete(obj: ModelObject): Callback =
-        (ModelObjectApi.delete(obj.id, softDelete = true) >> (deleting.setState(None) >> reload).asAsyncCallback)
+        (FullZIOStackClientRepository.modelObjectOps.delete(obj.id, softDelete = true) >> (deleting.setState(None) >> reload).asAsyncCallback)
           .handleError(e => error.setState(Some(e.getMessage)).asAsyncCallback)
           .toCallback
 

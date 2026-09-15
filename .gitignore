@@ -63,3 +63,6 @@ dist
 # npm / vite
 node_modules
 /.claude/
+
+# scala-cli
+.scala-build/

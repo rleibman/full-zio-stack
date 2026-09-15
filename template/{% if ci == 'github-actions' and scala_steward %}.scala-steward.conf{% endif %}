@@ -1,0 +1,3 @@
+# Scala Steward (https://github.com/scala-steward-org/scala-steward) opens pull requests for dependency updates.
+# Enable it for this repository by installing the Scala Steward GitHub App, or by running its GitHub Action.
+updates.limit = 10

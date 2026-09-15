@@ -19,6 +19,9 @@ so only override them when the user explicitly asks.
 | `description` | free text | empty | one line from the request |
 | `repo_url` | URL | empty | only if the user gives one |
 
+Computed, never asked: `base_package_path` (from `base_package`), `copyright_year` (the year of generation, kept on
+updates), `migration_dir` (`mysql` for MariaDB and MySQL, otherwise the database).
+
 ## Shape
 
 | Key | Values | Default | Phrases |
@@ -34,7 +37,8 @@ so only override them when the user explicitly asks.
 | `db_layer` | `quill`, `doobie`, `slick` | `quill` | "doobie", "plain SQL", "cats" → `doobie`; "Slick" → `slick` |
 | `http_port` | integer | `8080` | "on port N" |
 | `db_name` | identifier | *derived* from `project_slug` | not asked when `database=sqlite` |
-| `db_user` | identifier | *derived*: same as `db_name` | not asked when `database=sqlite` |
+| `db_user` | identifier | *derived*: same as `db_name` | also the development password; not asked when `database=sqlite` |
+| `db_port` | integer | 3306, or 5432 for Postgres | host port of the development database; change it if that port is taken locally. Not asked when `database=sqlite` |
 | `sqlite_file` | path | `data/<project_slug>.db` | only when `database=sqlite` |
 
 ## Ops

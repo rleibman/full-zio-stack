@@ -23,7 +23,8 @@ package net.leibman.fullziostack.server
 
 import caliban.{GraphiQLHandler, QuickAdapter}
 import net.leibman.fullziostack.config.HttpConfig
-import net.leibman.fullziostack.graphql.{FullZIOStackApi, FullZIOStackService}
+import net.leibman.fullziostack.db.ZIORepository
+import net.leibman.fullziostack.graphql.FullZIOStackApi
 import zio.*
 import zio.http.*
 
@@ -32,7 +33,7 @@ import java.nio.file.{Files, Path as FilePath}
 object ApiRoutes {
 
   /** GraphQL at /api/graphql, GraphiQL at /api/graphiql, /health, and the client's static files. */
-  def routes(http: HttpConfig): Task[Routes[FullZIOStackService, Response]] =
+  def routes(http: HttpConfig): Task[Routes[ZIORepository, Response]] =
     FullZIOStackApi.api.interpreter.map { interpreter =>
       Routes(
         Method.ANY / "api" / "graphql"  -> QuickAdapter(interpreter).handlers.api,

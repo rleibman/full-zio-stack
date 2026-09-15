@@ -1,0 +1,28 @@
+package {{ base_package }}.server
+
+import {{ base_package }}.config.AppConfig
+import {{ base_package }}.db.{DataSources, MockRepository, ZIORepository}
+import zio.*
+import zio.logging.backend.SLF4J
+
+/** How the application is wired, independent of the HTTP server. */
+object AppLayers {
+
+  /** Everything the HTTP servers need. */
+  type AppEnvironment = AppConfig & ZIORepository
+
+  /** Config → DataSource (pooled, migrated, closed on shutdown) → repository. */
+  val live: TaskLayer[AppEnvironment] = ZLayer.make[AppEnvironment](
+    AppConfig.live,
+    AppConfig.database,
+    DataSources.live,
+    ZIORepository.live
+  )
+
+  /** The same, over in-memory data: for tests, or for running without a database. */
+  def mock(config: AppConfig): ULayer[AppEnvironment] = ZLayer.succeed(config) ++ MockRepository.live
+
+  /** Sends ZIO's log output through SLF4J (configured by logback.xml). */
+  val logging: ZLayer[Any, Nothing, Unit] = Runtime.removeDefaultLoggers >>> SLF4J.slf4j
+
+}

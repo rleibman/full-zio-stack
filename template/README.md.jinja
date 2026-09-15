@@ -1,0 +1,76 @@
+{%- set full_stack = components == 'full-stack' -%}
+# {{ project_name }}
+
+{% if description %}{{ description }}
+
+{% endif -%}
+Scala 3 and ZIO 2 on the server ({{ http_server }}, a Caliban GraphQL API, {{ db_layer }} on {{ database }}, Flyway
+migrations){% if full_stack %}, and a Scala.js + React + Material UI client{% endif %}. Generated from the
+[full-zio-stack](https://github.com/rleibman/full-zio-stack) template.
+
+`AGENTS.md` describes the modules, commands and conventions in detail (for people and AI agents alike).
+
+## Getting started
+
+You need a JDK 17+ and sbt{% if full_stack %}, Node.js with npm{% endif %}{% if database != 'sqlite' %}, and Docker (for the development database and the database tests){% endif %}.
+{%- if full_stack %}
+
+The client uses [ScalablyTyped](https://github.com/ScalablyTyped/Converter) facades for React and MUI, built by the
+standalone `stLib/` project with a locally published build of the converter (see `stLib/project/plugins.sbt`).
+Publish them once, and again whenever `stLib/package.json` changes:
+
+```bash
+cd stLib && npm install && sbt --error publishLocal && cd ..
+```
+
+The first run takes several minutes and several GB of memory.
+{%- endif %}
+
+```bash
+{%- if database != 'sqlite' and dev_compose %}
+docker compose up -d                                  # the development database
+{%- endif %}
+{%- if full_stack %}
+sbt client/webDebugDist                               # builds the client into debugDist/
+STATIC_CONTENT_DIR=debugDist sbt server/run           # http://localhost:{{ http_port }}
+{%- else %}
+sbt server/run                                        # http://localhost:{{ http_port }}
+{%- endif %}
+```
+
+Flyway creates the tables on startup. GraphiQL is at http://localhost:{{ http_port }}/api/graphiql.
+{%- if database == 'sqlite' %}
+
+The database is the file `{{ sqlite_file }}`. SQLite only supports a few forms of `ALTER TABLE`, so some schema
+changes need a "create new table, copy, drop old" migration: see https://www.sqlite.org/lang_altertable.html.
+{%- endif %}
+
+## Testing
+
+```bash
+sbt test       # incremental: reruns only the tests whose code changed
+sbt testFull   # everything
+```
+
+## Adding to it
+
+`ModelObject` is a sample entity wired through every layer. To add your own, follow its pattern (every file involved
+has `ModelObject` in its name), or ask Claude Code to "add a ... entity": the `add-entity` skill in `.claude/skills/`
+walks through it.
+{%- if packaging == 'docker' %}
+
+## Packaging
+
+`sbt server/Docker/publishLocal` builds a Docker image{% if full_stack %} that includes the production client build{% endif %}.
+{%- elif packaging == 'systemd' %}
+
+## Packaging
+
+`sbt server/Debian/packageBin` builds a Debian package that installs the server as a systemd service{% if full_stack %},
+including the production client build{% endif %}.
+{%- endif %}
+
+## Updating from the template
+
+With a clean working tree, `copier update --trust --defaults` brings in the template's improvements. Resolve any
+conflict markers, then run the tests.

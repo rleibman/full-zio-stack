@@ -1,0 +1,40 @@
+package {{ base_package }}.db
+
+import {{ base_package }}.model.*
+import {{ base_package }}.repository.CRUDOperations
+
+/** The [[CRUDOperationsContract]] for ModelObject. Implementations extend this and provide `bootstrap`. */
+abstract class ModelObjectOperationsContract extends CRUDOperationsContract[ModelObjectId, ModelObject, ModelObjectSearch] {
+
+  override def entityName: String = "ModelObject"
+
+  override def operations(repository: ZIORepository): CRUDOperations[DataIO, ModelObject, ModelObjectId, ModelObjectSearch] =
+    repository.modelObjectOps
+
+  override def newEntity(name: String): ModelObject =
+    ModelObject(name = name, description = s"Description of $name", modelObjectType = ModelObjectType.type2)
+
+  override def modify(entity: ModelObject): ModelObject =
+    entity.copy(description = s"${entity.description} (edited)", modelObjectType = ModelObjectType.type3)
+
+  override def idOf(entity: ModelObject): ModelObjectId = entity.id
+
+  override def withId(
+    entity: ModelObject,
+    id:     ModelObjectId
+  ): ModelObject = entity.copy(id = id)
+
+  override def emptyId: ModelObjectId = ModelObjectId.empty
+
+  override def missingId: ModelObjectId = ModelObjectId(Int.MaxValue)
+
+  override def isDeleted(entity: ModelObject): Boolean = entity.deleted
+
+  override def searchText(
+    text:           String,
+    offset:         Int,
+    limit:          Int,
+    includeDeleted: Boolean
+  ): ModelObjectSearch = ModelObjectSearch(text = Some(text), includeDeleted = includeDeleted, offset = offset, limit = limit)
+
+}

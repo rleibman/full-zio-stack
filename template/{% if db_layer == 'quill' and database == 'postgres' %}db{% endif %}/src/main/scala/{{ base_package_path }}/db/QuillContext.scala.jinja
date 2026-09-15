@@ -1,0 +1,6 @@
+package {{ base_package }}.db
+
+import io.getquill.*
+
+/** The Quill context for this database. The only database-specific file of the Quill layer. */
+object QuillContext extends PostgresZioJdbcContext(SnakeCase)
