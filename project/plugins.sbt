@@ -12,9 +12,8 @@ addSbtPlugin("com.typesafe"  % "sbt-mima-plugin" % "1.2.0")
 
 ////////////////////////////////////////////////////////////////////////////////////
 // Server
-// No sbt2 build of sbt-revolver, so `api/reStart` is gone; use `api/run`.
+// No sbt2 build of sbt-revolver, so `reStart` is gone; use `server-ziohttp/run`.
 // addSbtPlugin("io.spray" % "sbt-revolver" % "0.10.0")
-addSbtPlugin("com.github.sbt" % "flyway-sbt" % "12.0.0")
 
 ////////////////////////////////////////////////////////////////////////////////////
 // Web client

@@ -1,0 +1,101 @@
+{%- set migration_dir = 'mysql' if database in ['mariadb', 'mysql'] else database -%}
+{%- set pkg = base_package_path -%}
+{%- set Layer = {'quill': 'Quill', 'doobie': 'Doobie', 'slick': 'Slick'}[db_layer] -%}
+---
+name: add-entity
+description: This skill should be used when the user asks to add a new domain entity, table, resource or model to {{ project_name }}, for example "add a Customer entity", "add orders with CRUD", "model invoices", "add a new table", or "remove the ModelObject sample". It adds the entity end to end (model, migration, data service, GraphQL, {% if components == 'full-stack' %}client screen, {% endif %}tests) by mirroring the ModelObject reference implementation.
+---
+
+# Add an entity end to end
+
+`ModelObject` is the reference implementation. Every file that makes it work is listed below. To add an entity
+(called `Thing` here), read each `ModelObject` file, then create or extend the matching `Thing` file, keeping the same
+structure. Work through the steps in order and compile after each one (`sbt --error compile`).
+
+Before starting, agree with the user on the entity's fields, their types, which are optional, and whether it needs
+soft delete (`deleted` flag) and search filters.
+
+## 1. Model: `model/`
+
+- `model/shared/src/main/scala/{{ pkg }}/model/ModelObject.scala`: the case class, an `opaque type` id with `empty`,
+  a search case class, and enums.
+- `model/shared/src/main/scala/{{ pkg }}/model/package.scala`: zio-json codecs.
+
+Create `Thing.scala` the same way and add its codecs.
+
+## 2. Migration: `db/`
+
+- Reference: `db/src/main/resources/db/migration/{{ migration_dir }}/V1__model_object.sql`.
+- Add `V<next>__thing.sql` next to it. Never modify an existing migration.
+{%- if database == 'sqlite' %}
+- SQLite: timestamps are `integer` (epoch millis), booleans are `integer` (0/1).
+{%- endif %}
+
+## 3. Data service: `db/`
+
+- `db/src/main/scala/{{ pkg }}/db/ModelObjectDataService.scala`: the service trait, extending `DataService`.
+- `db/src/main/scala/{{ pkg }}/db/{{ Layer }}ModelObjectDataService.scala`: the {{ db_layer }} implementation.
+- `db/src/main/scala/{{ pkg }}/db/MockModelObjectDataService.scala`: the in-memory implementation used by server tests.
+- `db/src/main/scala/{{ pkg }}/db/DataLayer.scala`: add the new service to `DataLayer.live`.
+{%- if db_layer == 'quill' %}
+- Quill: queries use the context in `db/src/main/scala/{{ pkg }}/db/QuillContext.scala`. Keep queries static: pass
+  values into `inline def` query fragments as `inline` parameters (see `matching` in the ModelObject service). Hard
+  deletes use plain SQL (`sql"DELETE FROM ... WHERE id = ${lift(id)}".as[Delete[T]]`), because Quill's aliased
+  `DELETE` isn't accepted by every database.
+{%- elif db_layer == 'doobie' %}
+- doobie: use the `Meta` instances in `db/src/main/scala/{{ pkg }}/db/DoobieMappings.scala`.
+{%- elif db_layer == 'slick' %}
+- Slick: import the profile from `db/src/main/scala/{{ pkg }}/db/SlickProfile.scala`, and import ZIO members
+  selectively (both export `Tag`).
+{%- endif %}
+
+## 4. Data service tests: `db/`
+
+- `db/src/test/scala/{{ pkg }}/db/DataServiceContractSpec.scala` is the generic CRUD contract every data service passes.
+- `db/src/test/scala/{{ pkg }}/db/ModelObjectDataServiceContract.scala` tells the contract how to build, modify and
+  search ModelObjects. Create `ThingDataServiceContract.scala` the same way.
+- `db/src/test/scala/{{ pkg }}/db/ModelObjectDataServiceSpec.scala` runs it against the real database{% if database != 'sqlite' %} (a testcontainer){% endif %},
+  and `MockModelObjectDataServiceSpec.scala` against the mock. Add `ThingDataServiceSpec.scala` and
+  `MockThingDataServiceSpec.scala`. Run `sbt --error db/test`.
+
+## 5. GraphQL: `server/`
+
+- `server/src/main/scala/{{ pkg }}/graphql/{{ class_prefix }}Api.scala`: add `Thing` queries and mutations (with
+  their `...Args` case classes) next to the `ModelObject` ones, plus `Schema`/`ArgBuilder` givens for the new id type.
+- `server/src/main/scala/{{ pkg }}/graphql/{{ class_prefix }}Service.scala`: add service methods. Validate input there
+  (fail with `ErrorCode.BAD_USER_INPUT`) and map `DataServiceException` with `fromDataServiceException`.
+- `server/src/main/scala/{{ pkg }}/server/AppLayers.scala`: wire any new layers (both `live` and `mock`).
+- Regenerate the schema: `sbt server/calibanRender`. Commit `server/src/main/graphql/schema.graphql` with the change
+  (`SchemaSpec` fails until you do).
+- Add a query and a mutation for `Thing` to `server/src/test/scala/{{ pkg }}/server/ServerContractSpec.scala`
+  (`ServerSpec.scala` only says how to start the server).
+{%- if components == 'full-stack' %}
+
+## 6. Client: `client/`
+
+- The GraphQL client (`{{ class_prefix }}Client`) is generated from `schema.graphql` on compile, so the new operations
+  appear after step 5.
+- `client/src/main/scala/{{ pkg }}/client/api/ModelObjectApi.scala` wraps the generated operations in terms of the
+  shared model. Create `ThingApi.scala` the same way.
+- `client/src/main/scala/{{ pkg }}/client/pages/ModelObjectPage.scala` (table, search, paging) and
+  `client/src/main/scala/{{ pkg }}/client/pages/ModelObjectForm.scala` (create/edit dialog) are the patterns. Create
+  `ThingPage.scala` and `ThingForm.scala`.
+- Add the page to the navigation in `client/src/main/scala/{{ pkg }}/client/App.scala`.
+- Follow the client rules in `AGENTS.md` (MUI import alias, `MuiExtensions`).
+- Check with `sbt --error client/webDebugDist`, then run the server and try the screen.
+{%- endif %}
+
+## 7. Finish
+
+`sbt --error test` must pass. Summarize the files you added and changed.
+
+## Removing the ModelObject sample
+
+Only once at least one real entity works end to end, and only if the user agrees:
+
+1. Delete every `ModelObject` file listed above{% if components == 'full-stack' %}, including the client API, page and form{% endif %}, and remove its entries from
+   `DataLayer.scala`, `AppLayers.scala`, `{{ class_prefix }}Api.scala`, `{{ class_prefix }}Service.scala`,
+   `ServerContractSpec.scala`{% if components == 'full-stack' %} and `App.scala`{% endif %}.
+2. Add a migration that drops the table (`V<next>__drop_model_object.sql`). Never delete `V1__model_object.sql`,
+   because databases that already ran it would fail Flyway validation.
+3. Regenerate the schema, then run `sbt --error test`.

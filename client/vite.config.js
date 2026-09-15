@@ -19,7 +19,7 @@ function required(name) {
 const scalaJSOutputDir = required("SCALAJS_OUTPUT_DIR");
 const outDir = required("VITE_OUT_DIR");
 
-// The Scala.js linker output imports npm packages by bare name (react, semantic-ui-react, ...). Node resolution
+// The Scala.js linker output imports npm packages by bare name (react, @mui/material, ...). Node resolution
 // walks UP from the importing file to find node_modules -- and under sbt 2 that output lives at
 // <repo>/target/out/sjs1/..., nowhere near client/node_modules, so every bare import fails to resolve.
 // Re-resolve those imports as if they came from client/, where node_modules is.
@@ -57,8 +57,8 @@ export default defineConfig(({ mode }) => ({
         warn(warning);
       },
       output: {
-        // Split npm dependencies out of the app bundle, so a Scala change does not invalidate React and
-        // semantic-ui-react along with it. Vendor code changes only when package.json does.
+        // Split npm dependencies out of the app bundle, so a Scala change does not invalidate React and MUI
+        // along with it. Vendor code changes only when package.json does.
         codeSplitting: {
           groups: [{ name: "vendor", test: /node_modules/ }],
         },
@@ -68,14 +68,7 @@ export default defineConfig(({ mode }) => ({
     sourcemap: true,
   },
   resolve: {
-    alias: [
-      { find: /^scalajs$/, replacement: path.resolve(scalaJSOutputDir, "main.js") },
-      // React 19 removed ReactDOM.findDOMNode, and semantic-ui-react's <Ref> still calls it -- see
-      // react-dom-compat.js. The alias rewrites subpaths too, so react-dom/client has to be pointed back at the
-      // real package explicitly.
-      { find: /^react-dom$/, replacement: path.resolve(here, "react-dom-compat.js") },
-      { find: /^react-dom\/client$/, replacement: path.resolve(here, "node_modules/react-dom/client.js") },
-    ],
+    alias: [{ find: /^scalajs$/, replacement: path.resolve(scalaJSOutputDir, "main.js") }],
   },
   plugins: [resolveScalaJSImportsFromClient],
 }));

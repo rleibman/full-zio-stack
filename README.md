@@ -14,11 +14,10 @@ One of the most difficult thing in our field is to be able to choose a set of te
 #### zio-logging
 #### zio-test
 #### zio-json
-#### zio-jdbc
-#### zio-sql
-#### doobie
-Not strictly zio, but with the cats zio interop, it's super easy to combine
 #### quill
+The default database layer (quill-jdbc-zio): queries are checked and turned into SQL at compile time.
+#### doobie, Slick (coming as template choices)
+Not strictly zio, but with the cats zio interop, it's super easy to combine
 
 ### Non-ZIO tech
 #### scala.js (https://www.scala-js.org/)
@@ -39,91 +38,82 @@ An amazing project (that I've participated in, so I'm biased) that takes every t
 creates scala bindings for it. For React projects you can choose slinky or scalajs-react flavors. Also, coming soon, an sbt
 plugin that lets you chose exactly what javascript libraries you want to wrap. 
 
-#### semantic ui (https://react.semantic-ui.com/)
-I really like how the set of react components from the semantic library look and feel, it's very themable as well.
-Alternatives: https://material-ui.com/, https://react-bootstrap.github.io/, http://nikgraf.github.io/belle/#/?_k=dyoot9
+#### Material UI (https://mui.com/material-ui/)
+Replaced Semantic UI, which is no longer maintained (and needed a `findDOMNode` shim to survive React 19). The facades
+come from ScalablyTyped; `client/.../components/MuiExtensions.scala` fills the few gaps in them.
+Alternatives: https://react-bootstrap.github.io/
 
-#### MySQL
-I use mySQL mostly because I'm more familiar with it, switching the app to use something else should not be too difficult
-Alternatives: mariadb, postgress, oracle, sql server, etc... or if you want to go nosql: cassandra, mongoDB  
+#### MariaDB / MySQL / Postgres / SQLite
+MariaDB is the default. The schema lives in Flyway migrations (`db-core/src/main/resources/db/migration/<database>/`),
+applied when the server starts, so switching databases is a matter of choosing a different set of migrations and driver.
+
+## Status: becoming a template
+
+This repository is being turned into a [Copier](https://copier.readthedocs.io/) template that generates projects on this
+stack, with a choice of HTTP server, database and database layer. Until that's released, it's a runnable reference app.
+`CLAUDE.md` explains how the repository is organised for that purpose.
 
 ## How the app is put together
 
-### Configuring, compiling and running the app
-#### Toolchain
-Scala 3.9, sbt 2.x (the launcher picks the version from ```project/build.properties```), a JDK 17+, and Node/npm (for the
-ScalablyTyped facades and the vite bundler).
+| Module | What it is |
+|---|---|
+| `model/` | Domain types shared by the server and the client (cross-built for the JVM and Scala.js) |
+| `db-core/` | The `DataService` traits and errors, an in-memory mock, the pooled `DataSource` + Flyway, the migrations, and the contract test suites every database layer must pass |
+| `db-quill/` | The Quill implementation. It is built once per database as `db-quill-<database>`: shared code in `src/main/scala`, the database-specific Quill context in `src/main-<database>/scala` |
+| `server-core/` | Configuration, the Caliban GraphQL API and its service layer, and the layer wiring (`AppLayers`). Independent of the HTTP server |
+| `server-ziohttp/` | The zio-http server: GraphQL at `/api/graphql`, GraphiQL at `/api/graphiql`, `/health`, and the client's static files |
+| `client/` | Scala.js + scalajs-react + Material UI, bundled with vite. Talks to the server with a GraphQL client generated from the server's schema |
+| `stLib/` | A standalone sbt build that generates the ScalablyTyped facades (React, MUI) |
 
-#### First-time setup: the ScalablyTyped facades
-The facades live in ```stLib/```, a *standalone* sbt 2 build. Upstream ScalablyTyped only publishes an sbt 1 plugin, so it uses
-a fork of the converter published locally from ```~/projects/third-party/Converter``` (see ```stLib/project/plugins.sbt```). Generate
-and publish them to your local ivy repository once, and again whenever ```stLib/package.json``` changes:
+`ModelObject` is a sample entity wired through every layer: model, migration, data service, GraphQL, and a CRUD screen.
+To add your own entity, copy its pattern (every file involved has `ModelObject` in its name).
+
+### Toolchain
+Scala 3.9, sbt 2.x (the launcher picks the version from `project/build.properties`), a JDK 17+, Node/npm (for the
+ScalablyTyped facades and the vite bundler), and Docker (for the development database and the database tests).
+
+### First-time setup: the ScalablyTyped facades
+The facades live in `stLib/`, a *standalone* sbt 2 build. Upstream ScalablyTyped only publishes an sbt 1 plugin, so it uses
+a fork of the converter published locally from `~/projects/third-party/Converter` (see `stLib/project/plugins.sbt`). Generate
+and publish them to your local ivy repository once, and again whenever `stLib/package.json` changes (then bump `version`
+in `stLib/build.sbt` and `stlibVersion` in `build.sbt`):
 ```bash
 cd stLib && npm install && sbt --error publishLocal && cd ..
 ```
+The first run takes several minutes and several GB of memory.
 
-#### Database
-You'll need to have mysql running.
-To initialize the database, just run the scripts in the ```server/src/main/sql``` directory in order.
-Once you do that, you should configure the access to the database in ```server/src/main/resources/application.conf```, change the database url, username and password as needed
-
-### Shared code (model subproject)
-The common subproject gets compiled in both jvm and js flavors, since I want to be able  to share it between subprojects of both types
-
-#### Server (api subproject)
-In general a few parameters in ```server/src/main/resources/application.conf``` will control the application, tell it what port to run on, where to find the static web pages (the ```staticContentDir``` variable), etc.
-Once all is configured, in sbt, you should be able to run:
-```sbt
-  api/run
+### Running it
+```bash
+docker compose up -d                                   # MariaDB on localhost:13306, matching application.conf
+sbt client/webDebugDist                                # builds the client into ./debugDist
+STATIC_CONTENT_DIR=debugDist sbt server-ziohttp/run    # http://localhost:8080
 ```
-This will start the server. (sbt-revolver's ```reStart``` is gone: it has no sbt 2 build.)
+Flyway creates the tables on startup. GraphiQL is at http://localhost:8080/api/graphiql.
 
-#### Web client (client subproject)
-You need to compile all of the scala.js code into a nicely packaged js file. sbt links the Scala.js code and then drives
-[vite](https://vite.dev/) (configured in ```client/vite.config.js```, npm dependencies in ```client/package.json```) to bundle it:
-```sbt
-  client/webDebugDist   // unminified, React development build, into ./debugDist
-  client/webDist        // minified production build, into ./dist
-```
-Static assets placed in ```client/src/main/web``` are copied alongside the bundle; ```client/index.html``` is the page template.
+Configuration is in `server-core/src/main/resources/application.conf`. Every value can be overridden by the environment
+variable named next to it (`HTTP_PORT`, `DB_URL`, `DB_PASSWORD`...), or the whole file with `-Dconfig.file=...`.
 
-#### Utilities (util subproject)
-currently empty
+For a production build of the client, `sbt client/webDist` writes `./dist`, which the server serves by default.
 
-#### Generated scalablyTyped code (stLib standalone build)
-The code in this build is automatically generated by the scalablyTyped plugin and contains all the facades for the typescript
-libraries. It is published locally as ```net.leibman:full-zio-stack-stlib_sjs1_3``` and consumed by the client as a regular dependency.
-
-## Here's how to do some common tasks
-Note that I've put a bunch of "//TODO"s throughout the code that in places where I think you can expand or put additional stuff.
-
-### Adding a new web page
-For the most part, I follow the architecture laid out by [scalajs-react](https://github.com/japgolly/scalajs-react/blob/master/doc/ROUTER.md), the documentation there is pretty awesome.
-
-### Adding a new model object
-- Add the model object itself in ```model/shared/src/main/scala/model``` typically these objects are scala case classes
-- TODO what're the requirements to get CRUD for each object?
-
-### Adding a new javascript library
-Assuming you are using ScalablyTyped, add the library (and its typings, if they are not bundled) to ```stLib/package.json```
-(read the [ScalablyTyped documentation](https://github.com/oyvindberg/ScalablyTyped)), bump ```version``` in ```stLib/build.sbt```
-and ```stlibVersion``` in ```build.sbt```, and republish the facades. Then add the library itself to ```client/package.json``` so
-vite bundles it.
-If the library is a react library, you should choose a flavor of react bindings (currently either japgolly or Slinky bindings).
-Once you do that you should be good to go!
+### Changing the GraphQL API
+The client's GraphQL code is generated from `server-core/src/main/graphql/schema.graphql`. After changing the API, run
+`sbt server-core/calibanRender` to update that file; `SchemaSpec` fails until you do.
 
 ## Testing
-Most of this project is boilerplate, so *by definition* there's not much to test. The question is always "what to test?". Business logic of course. In this architecture business logic resides in the following places:
-- The server's Service classes. I suggest you keep your routes simple and create either methods within those classes or separate business class logic. I'll write a couple of tests to show how to test the routes
-- The database specific Repository... because we're not using a full ORM library, a lot of the mapping from Relational to OO happens in the DAO, it's a good idea to test these.
-  these are considered integration tests and are in the server/src/it path
-- The web application itself, I personally find it very hard to write unit tests against user interface, you should read:
-    - https://www.scala-js.org/libraries/testing.html
-    - https://github.com/japgolly/scalajs-react/blob/master/doc/TESTING.md
+```bash
+sbt test
+```
+- `DataServiceContractSpec` defines what every data service must do. It runs against the in-memory mock and, through
+  Testcontainers, against a real database for each database layer (Docker required).
+- `ServerContractSpec` starts the HTTP server on a random port and checks it over real HTTP: health, GraphQL queries,
+  mutations and error codes, GraphiQL, static files, client-side-route fallback, and path traversal.
+- `SchemaSpec` checks the committed GraphQL schema matches the API.
+
+Everything compiles with `-Werror` and `-Yexplicit-nulls`.
 
 ## Production
-Creating production artifacts is a bit beyond the scope of this project (it's meant to get you started, not to get you finished); however I do use sbt-native-packager to create
-a debian package of the server portion. I'd like to integrate that to create a full package that also includes the web application.
+The server uses sbt-native-packager (`sbt server-ziohttp/Debian/packageBin` builds a Debian package with a systemd
+service). Packaging choices (Docker, systemd, none) will be a template question.
 
 ## Acknowledgements
 - This [blog post](https://scalac.io/making-zio-akka-slick-play-together-nicely-part-1-zio-and-slick/) uses a stack that's very similar to the one described here, I borrowed from it extensively, mostly in it's use of zio.

@@ -1,0 +1,20 @@
+# Development database for this repository's default variant (MariaDB). Matches server-core's application.conf.
+services:
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: fullziostack
+      MARIADB_USER: fullziostack
+      MARIADB_PASSWORD: fullziostack
+      MARIADB_ROOT_PASSWORD: fullziostack-root
+    ports:
+      # 13306 on the host, so it does not clash with a locally installed MySQL/MariaDB.
+      - "13306:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 20
+volumes:
+  db-data:

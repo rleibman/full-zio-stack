@@ -1,0 +1,125 @@
+{%- set migration_dir = 'mysql' if database in ['mariadb', 'mysql'] else database -%}
+{%- set pkg = base_package_path -%}
+# {{ project_name }}: guide for AI agents (and humans)
+
+{% if description %}{{ description }}
+
+{% endif -%}
+Generated from the [full-zio-stack](https://github.com/rleibman/full-zio-stack) Copier template.
+`.copier-answers.yml` records the template version and the answers used; don't edit it by hand.
+
+## Stack
+
+- Scala 3, ZIO 2, sbt 2. Compiled with `-Werror` and `-Yexplicit-nulls` (see "Compiler rules").
+- **HTTP server:** {% if http_server == 'http4s' %}http4s (ember) through zio-interop-cats{% else %}zio-http{% endif %}.
+- **API:** Caliban GraphQL at `/api/graphql`, with GraphiQL at `/api/graphiql`. `/health` is the only REST endpoint.
+- **Database:** {{ {'mariadb': 'MariaDB', 'mysql': 'MySQL', 'postgres': 'PostgreSQL', 'sqlite': 'SQLite'}[database] }},
+  accessed with {{ {'quill': 'Quill (quill-jdbc-zio)', 'doobie': 'doobie (via zio-interop-cats)', 'slick': 'Slick'}[db_layer] }}.
+  The schema is managed by Flyway migrations, run at startup.
+{%- if components == 'full-stack' %}
+- **Client:** Scala.js + scalajs-react + Material UI (through ScalablyTyped facades in `stLib/`), bundled by vite,
+  talking to the server with caliban-client.
+{%- endif %}
+
+## Layout
+
+| Module | What lives there |
+|---|---|
+| `model/` | Domain types shared by the server{% if components == 'full-stack' %} and the client (cross-built JVM + JS){% endif %}: `{{ base_package }}.model` |
+| `db/` | Data services (`DataService` traits, the {{ db_layer }} implementation, the in-memory mock), Flyway migrations in `db/src/main/resources/db/migration/{{ migration_dir }}/`: `{{ base_package }}.db` |
+| `server/` | Config, the GraphQL API and service layer, and `{{ base_package }}.server.Main` |
+{%- if components == 'full-stack' %}
+| `client/` | Scala.js UI: `{{ base_package }}.client` |
+| `stLib/` | Standalone sbt build that generates the ScalablyTyped facades (React, MUI) into `{{ base_package }}.st` |
+{%- endif %}
+
+## Commands
+
+Always use `sbt --error …` to keep output short; drop `--error` only when you need the details.
+
+| Task | Command |
+|---|---|
+{%- if dev_compose %}
+| Start the dev database | `docker compose up -d` |
+{%- endif %}
+| Run all tests | `sbt --error test` |
+| Run the server | `sbt server/run` (config: `server/src/main/resources/application.conf`, override with `-Dconfig.file=…`) |
+| Regenerate the GraphQL schema file | `sbt server/calibanRender`, which writes `server/src/main/graphql/schema.graphql` |
+{%- if components == 'full-stack' %}
+| First-time / after changing `stLib/package.json` | `cd stLib && npm install && sbt --error publishLocal`, then bump `stlibVersion` in `build.sbt` (the first run takes several minutes and several GB of memory) |
+| Build the client (dev) | `sbt client/webDebugDist`, served by the server from `debugDist/` |
+| Build the client (prod) | `sbt client/webDist`, which writes `dist/` |
+{%- endif %}
+| Format | `sbt scalafmtAll` |
+{%- if packaging == 'docker' %}
+| Docker image | `sbt server/Docker/publishLocal` |
+{%- elif packaging == 'systemd' %}
+| Debian package | `sbt server/Debian/packageBin` |
+{%- endif %}
+
+## Architecture rules
+
+- **Effects:** everything is ZIO. Data services return `DataIO[A]` (= `IO[DataServiceException, A]`), never throw,
+  and never return `null`.
+- **Errors:** `DataServiceException` is a small ADT (`NotFound`, `Conflict`, `Transient`, `Unexpected`). The service
+  layer (`{{ class_prefix }}Service`) maps it to Caliban errors whose `extensions.code` is an `ErrorCode`
+  (`BAD_USER_INPUT`, `NOT_FOUND`, `CONFLICT`, `UNAVAILABLE`, `INTERNAL`); unexpected errors are logged and reported
+  without details. Don't `.orDie` expected failures.
+- **Layers:** `server/.../AppLayers.scala` wires config → `DataSources.live` (pooled, migrated by Flyway, closed on
+  shutdown) → `DataLayer.live` → services. `AppLayers.mock` wires the same services over in-memory data, for tests.
+  Add new services to both.
+- **Tests:** data services pass `DataServiceContractSpec` (against the mock and the real database); HTTP behaviour is
+  in `ServerContractSpec` (real HTTP, random port). Both use ZIO Test's *live* Clock and Random.
+- **Schema changes only through new Flyway migrations** (`V<n>__description.sql` in
+  `db/src/main/resources/db/migration/{{ migration_dir }}/`). Never edit a migration that has already run anywhere.
+- **Timestamps are `java.time.Instant`.**{% if database == 'sqlite' %} SQLite stores them as `INTEGER` epoch
+  milliseconds; declare timestamp columns `integer`.{% endif %}
+- **Saves:** `upsert` inserts when the id is the entity's `empty` id, and updates otherwise.
+- **Entities:** to add one, use the `add-entity` skill (`.claude/skills/add-entity/SKILL.md`). `ModelObject` is the
+  reference implementation that every new entity mirrors.
+
+## Compiler rules
+
+- `-Werror`: every warning is an error. Fix the cause; add a narrowly scoped `-Wconf` only when the warning comes from
+  code you don't control, with a comment saying why.
+- `-Yexplicit-nulls`: Java APIs return `T | Null`. Handle the null, or add a local `import scala.language.unsafeNulls`
+  in the smallest possible scope.
+- ZIO's `Tag` (izumi-reflect) can't handle the "flexible" types of Java calls under explicit nulls. When a Java-returned
+  value ends up in a `ZLayer` or `ZIO` type, give it an explicit Scala type (`val p: Path = Files.createTempDirectory(...).nn`).
+- Caliban: `graphQL(...)` infers its environment as `Any` unless told otherwise. Keep the explicit
+  `given Schema[{{ class_prefix }}Service, Queries]` / `Mutations` in `{{ class_prefix }}Api.scala`, and derive through its `ApiSchema` object.
+{%- if http_server == 'http4s' %}
+- fs2 3.7+: provide `given Files[Task] = Files.forAsync[Task]` and `given Network[Task] = Network.forAsync[Task]`
+  explicitly. The implicit derivation from `Async` is deprecated, which fails the build.
+{%- endif %}
+{%- if db_layer == 'slick' %}
+- Slick's `api.*` and `zio.*` both export `Tag`. In Slick files, import ZIO members selectively (`import zio.{RIO, ZIO}`).
+{%- endif %}
+{%- if db_layer == 'doobie' %}
+- doobie time mappings live in `db/src/main/scala/{{ pkg }}/db/DoobieMappings.scala`. Use its `Meta` instances,
+  not `doobie.implicits.javatimedrivernative`{% if database == 'sqlite' %} (sqlite-jdbc can't read an `Instant` directly){% endif %}.
+{%- endif %}
+{%- if components == 'full-stack' %}
+
+## Client rules
+
+- Import MUI components as `import {{ base_package }}.st.muiMaterial.components.{List as MuiList, *}`. MUI has a
+  `List` component that would otherwise shadow `scala.List`.
+- `client/.../components/MuiExtensions.scala` fills gaps in the generated facades: `sxStyle` for `sx`, `target` on
+  `SelectChangeEvent`, DOM events on `TextField`. Add helpers there instead of casting inline.
+- ScalablyTyped builders become elements with `.build`. Do that when putting them in a `Seq` (e.g. `MenuItem`s,
+  table rows); single children convert implicitly.
+- Close `Dialog`s with `.onDismiss(callback)` from `MuiExtensions` (the generated `onClose` takes `js.Any`).
+- Server calls go through `client/.../api/`: `GraphQLClient.run` for any generated selection, plus one `<Entity>Api`
+  per entity that maps generated types to the shared model.
+- The theme lives in one place: `client/.../Theme.scala`.
+- To add an npm library: add it to `stLib/package.json`, regenerate the facades (see Commands), and add it to
+  `client/package.json`.
+- The client calls the server with relative URLs (same origin). Don't hardcode hosts or ports.
+{%- endif %}
+
+## Updating from the template
+
+The working tree must be clean. Then run `copier update --trust --defaults`, resolve any conflict markers, and run
+the tests. To switch a variant (e.g. the database), run `copier update --trust --defaults --data database=postgres`
+and expect to port any code you wrote against the old variant.

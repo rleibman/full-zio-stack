@@ -12,7 +12,7 @@ lazy val SCALA = "3.9.0"
 
 val scalajsReactVersion = "4.0.0"
 
-version := "2.0.0"
+version := "3.0.0"
 
 enablePlugins(ScalablyTypedConverterExternalNpmPlugin)
 
@@ -25,7 +25,8 @@ startYear        := Some(2024)
 organizationName := "Roberto Leibman"
 headerLicense    := Some(HeaderLicense.MIT("2024", "Roberto Leibman", HeaderLicenseStyle.Detailed))
 name             := "full-zio-stack-stlib"
-stOutputPackage  := "net.leibman.fullziostack"
+// Under .st so the facades can never clash with the app's own packages.
+stOutputPackage  := "net.leibman.fullziostack.st"
 stFlavour        := Flavour.ScalajsReact
 
 // ExternalNpm: npm dependencies live in ./package.json and are installed with `npm install` here.
@@ -55,7 +56,7 @@ libraryDependencySchemes ++= Seq(
 scalaJSLinkerConfig ~= (_.withSourceMap(false))
 
 // Fully generate facades only for these libraries; everything else is minimized to the reachable API surface.
-stMinimize := Selection.AllExcept("semantic-ui-react")
+stMinimize := Selection.AllExcept("@mui/material")
 
 licenses := Seq(License.MIT)
 
