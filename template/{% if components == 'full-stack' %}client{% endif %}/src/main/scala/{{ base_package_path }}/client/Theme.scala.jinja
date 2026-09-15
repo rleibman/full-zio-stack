@@ -1,0 +1,25 @@
+package {{ base_package }}.client
+
+import {{ base_package }}.st.muiMaterial.stylesCreateThemeMod.ThemeOptions
+import {{ base_package }}.st.muiMaterial.stylesCreateThemeNoVarsMod.Theme as MuiTheme
+import {{ base_package }}.st.muiMaterial.stylesMod
+
+import scala.scalajs.js
+
+/** The app's look, in one place. See https://mui.com/material-ui/customization/theming/ for what goes in here. */
+object Theme {
+
+  val theme: MuiTheme = stylesMod.createTheme(
+    js.Dynamic
+      .literal(
+        palette = js.Dynamic.literal(
+          mode = "light",
+          primary = js.Dynamic.literal(main = "#1565c0"),
+          secondary = js.Dynamic.literal(main = "#6a1b9a")
+        ),
+        shape = js.Dynamic.literal(borderRadius = 8)
+      )
+      .asInstanceOf[ThemeOptions]
+  )
+
+}

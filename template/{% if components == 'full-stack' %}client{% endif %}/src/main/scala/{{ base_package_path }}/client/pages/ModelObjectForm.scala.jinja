@@ -1,0 +1,85 @@
+package {{ base_package }}.client.pages
+
+import japgolly.scalajs.react.*
+import japgolly.scalajs.react.vdom.html_<^.*
+import {{ base_package }}.client.components.MuiExtensions.*
+import {{ base_package }}.client.components.OutlinedSelect
+import {{ base_package }}.model.*
+import {{ base_package }}.st.muiMaterial.components.{Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, TextField}
+import {{ base_package }}.st.muiMaterial.muiMaterialStrings as MuiStrings
+import {{ base_package }}.st.muiSystem.muiSystemStrings as SystemStrings
+
+import scala.scalajs.js
+
+/** Create/edit dialog for a ModelObject. Saving is left to the caller, which knows what to reload afterwards. */
+object ModelObjectForm {
+
+  case class Props(
+    initial:  ModelObject,
+    saving:   Boolean,
+    onSave:   ModelObject => Callback,
+    onCancel: Callback
+  )
+
+  private val component = ScalaFnComponent[Props] { props =>
+    for {
+      form <- useState(props.initial)
+    } yield {
+      val isNew = props.initial.id == ModelObjectId.empty
+      val valid = !form.value.name.isBlank
+      Dialog(open = true)
+        .fullWidth(true)
+        .maxWidth(SystemStrings.sm)
+        .onDismiss(props.onCancel)(
+          DialogTitle()(if (isNew) "New model object" else s"Edit ${props.initial.name}"),
+          DialogContent()(
+            Box().sxStyle(js.Dynamic.literal(display = "flex", flexDirection = "column", gap = 2, pt = 1))(
+              TextField()
+                .label("Name")
+                .required(true)
+                .fullWidth(true)
+                .autoFocus(true)
+                .value(form.value.name)
+                .error(!valid)
+                .helperText(if (valid) "" else "A name is required")
+                .onChange((e: TextFieldEvent) => form.modState(_.copy(name = e.target.value))),
+              TextField()
+                .label("Description")
+                .fullWidth(true)
+                .multiline(true)
+                .minRows(3)
+                .value(form.value.description)
+                .onChange((e: TextFieldEvent) => form.modState(_.copy(description = e.target.value))),
+              OutlinedSelect
+                .label("Type")
+                .fullWidth(true)
+                .value(form.value.modelObjectType.toString)
+                .onChange(
+                  (
+                    e,
+                    _
+                  ) => form.modState(_.copy(modelObjectType = ModelObjectType.valueOf(e.target.value.asInstanceOf[String])))
+                )(
+                  ModelObjectType.values.toSeq.map(t => MenuItem.value(t.toString).withKey(t.toString)(t.toString).build)*
+                )
+            )
+          ),
+          DialogActions()(
+            Button.onClick(_ => props.onCancel)("Cancel"),
+            Button
+              .variant(MuiStrings.contained)
+              .disabled(!valid || props.saving)
+              .onClick(_ => props.onSave(form.value))(if (props.saving) "Saving..." else "Save")
+          )
+        )
+    }
+  }
+
+  def apply(
+    initial:  ModelObject,
+    saving:   Boolean,
+    onSave:   ModelObject => Callback,
+    onCancel: Callback
+  ): VdomElement = component(Props(initial, saving, onSave, onCancel))
+
+}

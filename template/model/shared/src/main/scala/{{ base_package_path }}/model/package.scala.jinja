@@ -1,0 +1,19 @@
+package {{ base_package }}.model
+
+import zio.json.*
+
+// JSON codecs for the model. The GraphQL API derives its own schema; these are for anything else that speaks JSON.
+
+given JsonCodec[ModelObjectId] = JsonCodec.int.transform(ModelObjectId.apply, _.value)
+
+given JsonCodec[ModelObjectType] =
+  JsonCodec.string.transformOrFail(
+    s => ModelObjectType.values.find(_.toString == s).toRight(s"Unknown ModelObjectType: $s"),
+    _.toString
+  )
+
+given JsonCodec[ModelObject] = DeriveJsonCodec.gen[ModelObject]
+
+given JsonCodec[ModelObjectSearch] = DeriveJsonCodec.gen[ModelObjectSearch]
+
+given [T: JsonCodec]: JsonCodec[Page[T]] = DeriveJsonCodec.gen[Page[T]]

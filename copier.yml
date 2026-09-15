@@ -1,0 +1,165 @@
+# full-zio-stack Copier template. The template files live in template/, which scripts/MakeTemplate.scala generates from
+# this repository's modules and overlay/. Every question here must also be documented in
+# claude-plugin/skills/full-zio-stack/references/answers.md.
+
+_min_copier_version: "9.4.0"
+_subdirectory: template
+_templates_suffix: .jinja
+_answers_file: .copier-answers.yml
+
+# ---- identity
+project_name:
+  type: str
+  help: Project name (human readable)
+  default: My ZIO App
+  validator: "{% if not project_name.strip() %}Required{% endif %}"
+project_slug:
+  type: str
+  help: Directory, sbt and npm name
+  default: "{{ project_name | lower | replace(' ', '-') }}"
+  validator: "{% if not (project_slug | regex_search('^[a-z][a-z0-9-]*$')) %}Lower case letters, digits and dashes, starting with a letter{% endif %}"
+class_prefix:
+  type: str
+  help: Prefix for generated class names (the GraphQL API, service and client)
+  default: "{{ project_name | title | replace(' ', '') | replace('-', '') }}"
+  validator: "{% if not (class_prefix | regex_search('^[A-Z][A-Za-z0-9]*$')) %}An UpperCamelCase identifier{% endif %}"
+organization:
+  type: str
+  help: sbt organization (reverse domain)
+  default: com.example
+  validator: "{% if not (organization | regex_search('^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$')) %}A reverse domain, like com.example{% endif %}"
+base_package:
+  type: str
+  help: Base Scala package
+  default: "{{ organization }}.{{ project_slug | replace('-', '') }}"
+  validator: "{% if not (base_package | regex_search('^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$')) %}Not a valid package name{% endif %}"
+base_package_path:
+  type: str
+  default: "{{ base_package | replace('.', '/') }}"
+  when: false
+author_name:
+  type: str
+  help: Author (for license headers)
+  validator: "{% if not author_name.strip() %}Required{% endif %}"
+author_email:
+  type: str
+  help: Author's email (optional)
+  default: ""
+copyright_year:
+  type: str
+  default: "{{ copyright_year | default('%Y' | strftime) }}"
+  when: false
+license:
+  type: str
+  help: License
+  choices: [MIT, Apache-2.0, BSD-3-Clause, GPL-3.0, Proprietary]
+  default: MIT
+description:
+  type: str
+  help: One-line description (optional)
+  default: ""
+repo_url:
+  type: str
+  help: Repository URL (optional)
+  default: ""
+
+# ---- shape
+components:
+  type: str
+  help: What to generate
+  choices:
+    Server and Scala.js client: full-stack
+    Server only: server-only
+  default: full-stack
+
+# ---- server
+http_server:
+  type: str
+  help: HTTP server
+  choices: [zio-http, http4s]
+  default: zio-http
+database:
+  type: str
+  help: Database
+  choices: [mariadb, mysql, postgres, sqlite]
+  default: mariadb
+db_layer:
+  type: str
+  help: Database layer
+  choices: [quill, doobie, slick]
+  default: quill
+migration_dir:
+  type: str
+  default: "{{ 'mysql' if database in ['mariadb', 'mysql'] else database }}"
+  when: false
+http_port:
+  type: int
+  help: HTTP port
+  default: 8080
+db_name:
+  type: str
+  help: Database name
+  default: "{{ project_slug | replace('-', '_') }}"
+  when: "{{ database != 'sqlite' }}"
+db_user:
+  type: str
+  help: Database user (also the development password)
+  default: "{{ db_name }}"
+  when: "{{ database != 'sqlite' }}"
+db_port:
+  type: int
+  help: Database port on localhost
+  default: "{{ 5432 if database == 'postgres' else 3306 }}"
+  when: "{{ database != 'sqlite' }}"
+sqlite_file:
+  type: str
+  help: SQLite database file
+  default: "data/{{ project_slug }}.db"
+  when: "{{ database == 'sqlite' }}"
+
+# ---- ops
+dev_compose:
+  type: bool
+  help: Add a docker-compose file for a development database?
+  default: true
+  when: "{{ database != 'sqlite' }}"
+packaging:
+  type: str
+  help: Packaging
+  choices:
+    Docker image: docker
+    Debian package with a systemd service: systemd
+    None: none
+  default: docker
+ci:
+  type: str
+  help: Continuous integration
+  choices:
+    GitHub Actions: github-actions
+    None: none
+  default: github-actions
+scala_steward:
+  type: bool
+  help: Add a Scala Steward configuration?
+  default: true
+  when: "{{ ci == 'github-actions' }}"
+git_init:
+  type: bool
+  help: Run git init?
+  default: true
+
+_tasks:
+  - command: git init --quiet
+    when: "{{ git_init and _copier_operation == 'copy' }}"
+
+_message_after_copy: |
+  {{ project_name }} is ready in {{ _copier_conf.dst_path }}. Next:
+  {%- if components == 'full-stack' %}
+    cd stLib && npm install && sbt --error publishLocal && cd ..   (the client's facades; needs the local ScalablyTyped converter)
+  {%- endif %}
+  {%- if database != 'sqlite' and dev_compose %}
+    docker compose up -d
+  {%- endif %}
+    sbt testFull
+    sbt server/run
+  AGENTS.md describes the project.

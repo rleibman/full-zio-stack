@@ -1,0 +1,77 @@
+package {{ base_package }}.db
+
+import doobie.*
+import doobie.implicits.*
+import {{ base_package }}.db.DoobieMappings.given
+import {{ base_package }}.model.*
+import {{ base_package }}.repository.Repository.ModelObjectOperations
+import {{ base_package }}.repository.RepositoryError
+import zio.*
+import zio.interop.catz.*
+
+import java.time.temporal.ChronoUnit
+
+final case class DoobieModelObjectOperations(transactor: Transactor[Task]) extends ModelObjectOperations[DataIO] {
+
+  private given Meta[ModelObjectId] = Meta[Int].timap(ModelObjectId.apply)(_.value)
+  private given Meta[ModelObjectType] = Meta[String].timap(ModelObjectType.valueOf)(_.toString)
+
+  private val now = Clock.instant.map(_.truncatedTo(ChronoUnit.MILLIS))
+
+  private def execute[A](program: ConnectionIO[A]): DataIO[A] = program.transact(transactor).mapError(RepositoryErrors.fromThrowable)
+
+  private val columns = fr"id, name, description, model_object_type, deleted, created, last_updated"
+
+  private def matching(search: ModelObjectSearch): Fragment =
+    Fragments.whereAndOpt(
+      Option.unless(search.includeDeleted)(fr"deleted = ${false}"),
+      search.text.map { text =>
+        val pattern = s"%${text.toLowerCase}%"
+        fr"(lower(name) like $pattern or lower(description) like $pattern)"
+      },
+      search.modelObjectType.map(modelObjectType => fr"model_object_type = $modelObjectType")
+    )
+
+  override def search(search: ModelObjectSearch): DataIO[Page[ModelObject]] =
+    execute(for {
+      items <- (fr"select" ++ columns ++ fr"from model_object" ++ matching(search) ++
+        fr"order by id limit ${search.limit} offset ${search.offset}").query[ModelObject].to[Seq]
+      total <- (fr"select count(*) from model_object" ++ matching(search)).query[Long].unique
+    } yield Page(items, total))
+
+  override def get(id: ModelObjectId): DataIO[Option[ModelObject]] =
+    execute((fr"select" ++ columns ++ fr"from model_object where id = $id").query[ModelObject].option)
+
+  override def upsert(entity: ModelObject): DataIO[ModelObject] =
+    now.flatMap { timestamp =>
+      if (entity.id == ModelObjectId.empty) {
+        val row = entity.copy(created = timestamp, lastUpdated = timestamp)
+        execute(
+          sql"""insert into model_object (name, description, model_object_type, deleted, created, last_updated)
+                values (${row.name}, ${row.description}, ${row.modelObjectType}, ${row.deleted}, ${row.created}, ${row.lastUpdated})""".update
+            .withUniqueGeneratedKeys[ModelObjectId]("id")
+        ).map(id => row.copy(id = id))
+      } else {
+        for {
+          updated <- execute(
+            sql"""update model_object
+                  set name = ${entity.name}, description = ${entity.description}, model_object_type = ${entity.modelObjectType},
+                      deleted = ${entity.deleted}, last_updated = $timestamp
+                  where id = ${entity.id}""".update.run
+          )
+          _     <- ZIO.fail(RepositoryError.NotFound(s"ModelObject ${entity.id.value} not found")).when(updated == 0)
+          saved <- get(entity.id).someOrFail(RepositoryError.NotFound(s"ModelObject ${entity.id.value} not found"))
+        } yield saved
+      }
+    }
+
+  override def delete(
+    id:         ModelObjectId,
+    softDelete: Boolean
+  ): DataIO[Boolean] =
+    if (softDelete)
+      now
+        .flatMap(timestamp => execute(sql"update model_object set deleted = ${true}, last_updated = $timestamp where id = $id".update.run).map(_ > 0))
+    else execute(sql"delete from model_object where id = $id".update.run).map(_ > 0)
+
+}

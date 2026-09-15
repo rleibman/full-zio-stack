@@ -1,0 +1,113 @@
+# CI for the full-zio-stack template repository (generated projects get their own workflow from overlay/).
+#
+# The Scala.js client isn't built here: it needs the ScalablyTyped facades from stLib/, which are built with a locally
+# published converter. Run `WITH_CLIENT=1 tests/generate-and-build.sh ...` locally for that (see tests/README.md).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  repository:
+    name: Repository (docs, template freshness, server-side tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+      - uses: VirtusLab/scala-cli-setup@v1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install pyyaml
+      - name: AI docs match copier.yml and the plugin manifests parse
+        run: python3 tests/check-ai-docs.py static
+      - name: template/ is up to date
+        run: scala-cli run --server=false scripts/MakeTemplate.scala -- --check
+      - name: Every variant's tests (contract suites against real databases, both HTTP servers)
+        run: sbt --error testServerSide
+
+  validators:
+    name: Invalid answers are rejected
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install copier
+      - run: tests/validators.sh
+
+  generated:
+    name: Generated ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Every DB layer on every database (server-only: the client can't be built here).
+          - { name: "quill-mariadb", data: "--data components=server-only --data db_layer=quill --data database=mariadb --data packaging=none" }
+          - { name: "quill-mysql", data: "--data components=server-only --data db_layer=quill --data database=mysql --data packaging=none" }
+          - { name: "quill-postgres", data: "--data components=server-only --data db_layer=quill --data database=postgres --data packaging=none" }
+          - { name: "quill-sqlite", data: "--data components=server-only --data db_layer=quill --data database=sqlite --data packaging=none" }
+          - { name: "doobie-mariadb", data: "--data components=server-only --data db_layer=doobie --data database=mariadb --data packaging=none" }
+          - { name: "doobie-mysql", data: "--data components=server-only --data db_layer=doobie --data database=mysql --data packaging=none" }
+          - { name: "doobie-postgres", data: "--data components=server-only --data db_layer=doobie --data database=postgres --data packaging=none" }
+          - { name: "doobie-sqlite", data: "--data components=server-only --data db_layer=doobie --data database=sqlite --data packaging=none" }
+          - { name: "slick-mariadb", data: "--data components=server-only --data db_layer=slick --data database=mariadb --data packaging=none" }
+          - { name: "slick-mysql", data: "--data components=server-only --data db_layer=slick --data database=mysql --data packaging=none" }
+          - { name: "slick-postgres", data: "--data components=server-only --data db_layer=slick --data database=postgres --data packaging=none" }
+          - { name: "slick-sqlite", data: "--data components=server-only --data db_layer=slick --data database=sqlite --data packaging=none" }
+          # http4s with each DB layer.
+          - { name: "http4s-quill", data: "--data components=server-only --data http_server=http4s --data db_layer=quill --data packaging=none" }
+          - { name: "http4s-doobie", data: "--data components=server-only --data http_server=http4s --data db_layer=doobie --data database=postgres --data packaging=none" }
+          - { name: "http4s-slick", data: "--data components=server-only --data http_server=http4s --data db_layer=slick --data database=sqlite --data packaging=none" }
+          # Packaging, licenses, and a full-stack project's server side.
+          - { name: "docker-apache", data: "--data components=server-only --data database=sqlite --data packaging=docker --data license=Apache-2.0" }
+          - { name: "systemd-gpl", data: "--data components=server-only --data http_server=http4s --data database=postgres --data packaging=systemd --data license=GPL-3.0 --data ci=none" }
+          - { name: "full-stack-server-side", data: "--data components=full-stack --data license=Proprietary" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install copier pyyaml
+      - run: tests/generate-and-build.sh "$RUNNER_TEMP/project" --data project_name="CI Project" ${{ matrix.data }}
+
+  update:
+    name: copier update between the two newest tags
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install copier pyyaml
+      - name: Update round trip
+        run: |
+          tags=$(git tag --list 'v*' --sort=-v:refname | head -2)
+          if [ "$(echo "$tags" | grep -c .)" -lt 2 ]; then
+            echo "Fewer than two v* tags; nothing to test yet."
+            exit 0
+          fi
+          tests/update-roundtrip.sh "$(echo "$tags" | tail -1)" "$(echo "$tags" | head -1)" --data components=server-only --data database=sqlite

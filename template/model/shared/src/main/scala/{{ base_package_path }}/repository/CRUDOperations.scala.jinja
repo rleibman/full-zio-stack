@@ -1,0 +1,33 @@
+package {{ base_package }}.repository
+
+import {{ base_package }}.model.Page
+
+/** The basic operations on one entity type, in any effect: `ZIO` on the server, `AsyncCallback` in the client.
+  *
+  * @tparam F
+  *   the effect type
+  * @tparam E
+  *   the entity
+  * @tparam PK
+  *   the entity's id type
+  * @tparam S
+  *   the search criteria
+  */
+trait CRUDOperations[F[_], E, PK, S] {
+
+  def search(search: S): F[Page[E]]
+
+  def get(id: PK): F[Option[E]]
+
+  /** Inserts `entity` when its id is the entity's `empty` id, otherwise updates it. Returns the saved entity, with the id and timestamps set by the
+    * server. Updating an id that doesn't exist fails with [[RepositoryError.NotFound]].
+    */
+  def upsert(entity: E): F[E]
+
+  /** Soft delete marks the entity as deleted; hard delete removes it. Returns false if there was nothing to delete. */
+  def delete(
+    id:         PK,
+    softDelete: Boolean
+  ): F[Boolean]
+
+}

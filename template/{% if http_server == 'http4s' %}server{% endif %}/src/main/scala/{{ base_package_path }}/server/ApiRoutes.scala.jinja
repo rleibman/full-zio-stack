@@ -1,0 +1,54 @@
+package {{ base_package }}.server
+
+import caliban.interop.tapir.HttpInterpreter
+import caliban.{CalibanError, Http4sAdapter}
+import cats.syntax.all.*
+import fs2.io.file.{Files as Fs2Files, Path as Fs2Path}
+import {{ base_package }}.config.HttpConfig
+import {{ base_package }}.db.ZIORepository
+import {{ base_package }}.graphql.{{ class_prefix }}Api
+import org.http4s.*
+import org.http4s.dsl.Http4sDsl
+import org.http4s.server.Router
+import zio.*
+import zio.interop.catz.*
+
+import java.nio.file.{Files, Path as FilePath}
+
+object ApiRoutes {
+
+  /** The effect every route runs in: the GraphQL routes need the service, so the others run there too. */
+  type F[A] = RIO[ZIORepository, A]
+
+  // fs2 3.7 deprecated deriving this from Async, which -Werror turns into an error.
+  private given Fs2Files[F] = Fs2Files.forAsync[F]
+
+  private val dsl = Http4sDsl[F]
+  import dsl.*
+
+  /** GraphQL at /api/graphql, GraphiQL at /api/graphiql, /health, and the client's static files. */
+  def routes(http: HttpConfig): ZIO[ZIORepository, Throwable, HttpApp[F]] =
+    {{ class_prefix }}Api.api.interpreter.map { interpreter =>
+      Router[F](
+        "/api/graphql"  -> Http4sAdapter.makeHttpService[ZIORepository, CalibanError](HttpInterpreter(interpreter)),
+        "/api/graphiql" -> Http4sAdapter.makeGraphiqlService[F]("/api/graphql"),
+        "/"             -> (health <+> staticFiles(FilePath.of(http.staticContentDir).nn))
+      ).orNotFound
+    }
+
+  private val health: HttpRoutes[F] = HttpRoutes.of[F] { case GET -> Root / "health" => Ok("ok") }
+
+  /** Serves files from `directory`. Paths that aren't files get index.html, so client-side routes survive a reload. Nothing outside `directory` is
+    * ever served.
+    */
+  private def staticFiles(directory: FilePath): HttpRoutes[F] = {
+    val root = directory.toAbsolutePath.nn.normalize().nn
+    HttpRoutes.of[F] { case request @ GET -> path =>
+      val requested = root.resolve(path.segments.map(_.decoded()).mkString("/")).nn.normalize().nn
+      val file = if (requested.startsWith(root) && Files.isRegularFile(requested)) requested else root.resolve("index.html").nn
+      if (!file.startsWith(root) || !Files.isRegularFile(file)) NotFound()
+      else StaticFile.fromPath(Fs2Path.fromNioPath(file), Some(request)).getOrElseF(NotFound())
+    }
+  }
+
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "full-zio-stack",
+  "description": "Claude Code plugin for the full-zio-stack Copier template.",
+  "owner": {
+    "name": "Roberto Leibman"
+  },
+  "plugins": [
+    {
+      "name": "full-zio-stack",
+      "description": "Create and update Scala 3 + ZIO 2 + Caliban + Scala.js/React/MUI applications from the full-zio-stack Copier template.",
+      "source": "./claude-plugin",
+      "category": "development",
+      "homepage": "https://github.com/rleibman/full-zio-stack"
+    }
+  ]
+}

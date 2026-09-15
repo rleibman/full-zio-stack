@@ -1,0 +1,10 @@
+package {{ base_package }}.db
+
+import zio.*
+
+/** The mock must behave like the real implementations: the server tests rely on it. */
+object MockRepositorySpec extends ModelObjectOperationsContract {
+
+  override val bootstrap: ULayer[ZIORepository] = MockRepository.live
+
+}

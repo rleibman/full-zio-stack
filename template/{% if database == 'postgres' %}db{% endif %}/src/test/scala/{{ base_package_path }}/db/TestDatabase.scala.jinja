@@ -1,0 +1,32 @@
+package {{ base_package }}.db
+
+import com.dimafeng.testcontainers.PostgreSQLContainer
+import org.testcontainers.utility.DockerImageName
+import zio.*
+
+import javax.sql.DataSource
+
+/** A throwaway PostgreSQL in a container, with the migrations applied. Needs Docker. */
+object TestDatabase {
+
+  val config: TaskLayer[DatabaseConfig] = ZLayer.scoped {
+    ZIO
+      .acquireRelease(ZIO.attemptBlocking {
+        val image: DockerImageName = DockerImageName.parse("postgres:17").nn
+        val container = new PostgreSQLContainer(dockerImageNameOverride = Some(image))
+        container.start()
+        container
+      })(container => ZIO.attemptBlocking(container.stop()).orDie)
+      .map(container =>
+        DatabaseConfig(
+          url = container.jdbcUrl,
+          user = container.username,
+          password = container.password,
+          migrationsLocation = "classpath:db/migration/postgres"
+        )
+      )
+  }
+
+  val dataSource: TaskLayer[DataSource] = config >>> DataSources.live
+
+}

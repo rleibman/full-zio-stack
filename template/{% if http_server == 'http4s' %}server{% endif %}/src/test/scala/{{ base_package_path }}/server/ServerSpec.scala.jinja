@@ -1,0 +1,8 @@
+package {{ base_package }}.server
+
+/** The HTTP server contract, run against the http4s server. */
+object ServerSpec extends ServerContractSpec {
+
+  override def startServer = Main.startServer
+
+}

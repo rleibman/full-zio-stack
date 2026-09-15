@@ -1,0 +1,41 @@
+package {{ base_package }}.repository
+
+/** How repository operations fail, on the server and in the client alike. */
+sealed abstract class RepositoryError(
+  message: String,
+  cause:   Option[Throwable]
+) extends Exception(message, cause.orNull) {
+
+  /** True when retrying later might succeed (lost connection, timeout...). */
+  def isTransient: Boolean = false
+
+}
+
+object RepositoryError {
+
+  final case class NotFound(message: String) extends RepositoryError(message, None)
+
+  /** The input can't be accepted as it is (a required field is missing...). */
+  final case class Invalid(message: String) extends RepositoryError(message, None)
+
+  /** The operation broke a constraint: duplicate key, foreign key... */
+  final case class Conflict(
+    message: String,
+    cause:   Option[Throwable] = None
+  ) extends RepositoryError(message, cause)
+
+  final case class Transient(
+    message: String,
+    cause:   Option[Throwable] = None
+  ) extends RepositoryError(message, cause) {
+
+    override def isTransient: Boolean = true
+
+  }
+
+  final case class Unexpected(
+    message: String,
+    cause:   Option[Throwable] = None
+  ) extends RepositoryError(message, cause)
+
+}

@@ -1,0 +1,14 @@
+package {{ base_package }}.db
+
+import doobie.Meta
+
+import java.sql.Timestamp
+import java.time.Instant
+
+/** The doobie mappings that depend on the database. The only database-specific file of the doobie layer. */
+object DoobieMappings {
+
+  /** MariaDB: `DATETIME` columns, read and written through java.sql.Timestamp (as the other DB layers do). */
+  given Meta[Instant] = Meta[Timestamp].timap(_.toInstant.nn)(Timestamp.from(_).nn)
+
+}

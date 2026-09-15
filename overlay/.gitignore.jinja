@@ -1,0 +1,24 @@
+# sbt
+target/
+.bsp/
+project/project/
+
+# IDEs
+.idea/
+.vscode/
+.metals/
+.bloop/
+project/metals.sbt
+
+# Client builds and npm
+node_modules/
+dist/
+debugDist/
+{%- if database == 'sqlite' %}
+
+# The SQLite database
+{{ sqlite_file.rsplit('/', 1)[0] if '/' in sqlite_file else sqlite_file }}
+{%- endif %}
+
+*.log
+.DS_Store
