@@ -1,8 +1,71 @@
 # full-zio-stack
-A client/server app with a full scala 3/zio 2 stack.
+A template for client/server apps with a full Scala 3 / ZIO 2 stack.
 These are some of the technologies I'm using, I briefly describe why and mention some options in case my choices are not yours.
 One of the most difficult thing in our field is to be able to choose a set of technologies for a project that fit well together
 (or can be easily made to fit), are well supported, are easy to find developers who know them (or easy to train in them), modern, etc.
+
+Generate a project with the stack below, your choice of HTTP server, database and database layer, and a working CRUD
+screen, tests and CI included.
+
+## Create a project
+
+You need [Copier](https://copier.readthedocs.io/) 9.4+ (`pipx install copier`, or run it with `uvx copier`), a JDK
+17+ and sbt. For the Scala.js client you also need Node.js and npm; for MariaDB, MySQL or PostgreSQL, Docker (for the
+development database and the database tests).
+
+```bash
+copier copy --trust gh:rleibman/full-zio-stack my-app
+```
+
+Copier asks a few questions; every one has a default, so Enter all the way through gives the recommended stack:
+
+| Question | Choices (default first) |
+|---|---|
+| What to generate | server and Scala.js client, or server only |
+| HTTP server | zio-http, http4s |
+| Database | MariaDB, MySQL, PostgreSQL, SQLite |
+| Database layer | Quill, doobie, Slick |
+| Packaging | Docker image, Debian package with a systemd service, none |
+| CI | GitHub Actions, none |
+| License | MIT, Apache-2.0, BSD-3-Clause, GPL-3.0, proprietary |
+
+plus the project's name, organization, package, author and ports. To skip the questions, pass the answers:
+
+```bash
+copier copy --trust --defaults \
+  --data project_name="Acme Orders" --data organization=com.acme --data author_name="Jane Doe" \
+  --data http_server=http4s --data db_layer=doobie --data database=postgres \
+  gh:rleibman/full-zio-stack acme-orders
+```
+
+(`--trust` lets the template run its one post-generation task, `git init`.)
+
+What you get: a Scala 3 / ZIO 2 project whose sample entity, `ModelObject`, is wired through every layer (model,
+Flyway migration, database layer, Caliban GraphQL API, and a Material UI CRUD screen), with tests that run against
+a real database, a README, and an `AGENTS.md` that describes the project for people and AI agents. Its README says
+how to run it.
+
+**The client's facades.** The client uses [ScalablyTyped](https://github.com/ScalablyTyped/Converter) facades for React
+and MUI, built by the generated project's `stLib/` with a locally published fork of the converter, until the sbt 2
+support it relies on is released upstream. On a machine without that converter, generate a server-only project.
+
+**Updating.** Projects remember their answers (`.copier-answers.yml`). With a clean working tree,
+`copier update --trust --defaults` brings in the template's later improvements as a merge; resolve any conflicts and
+run the tests. `CHANGELOG.md` lists what each version changes.
+
+## With Claude Code
+
+This repository is also a Claude Code plugin. Install it once:
+
+```
+/plugin marketplace add rleibman/full-zio-stack
+/plugin install full-zio-stack@full-zio-stack
+```
+
+Then ask for what you want, e.g. "build a full stack app called Acme Orders with Postgres and http4s": Claude
+confirms the answers with you, generates the project with Copier, checks that it builds, runs and answers requests,
+and builds your features on top. Generated projects carry their own `AGENTS.md` and an `add-entity` skill, so asking
+to "add a Customer entity" adds it through every layer, following the project's conventions.
 
 ## Currently on the stack
 
@@ -49,13 +112,12 @@ MariaDB is the default. The schema lives in Flyway migrations (`db-core/src/main
 where MariaDB and MySQL share `mysql`), applied when the server starts. SQLite stores timestamps as integer epoch
 milliseconds and supports only limited `ALTER TABLE`, which matters when you write later migrations.
 
-## Status: becoming a template
+## Working on the template
 
-This repository is being turned into a [Copier](https://copier.readthedocs.io/) template that generates projects on this
-stack, with a choice of HTTP server, database and database layer. Until that's released, it's a runnable reference app.
-`CLAUDE.md` explains how the repository is organised for that purpose.
+This repository is both the template and a runnable app that contains every variant at once. `CLAUDE.md` explains how
+it is organised; the short version: the sbt modules below are real code, `overlay/` holds the files that exist only in
+generated projects, and `scripts/MakeTemplate.scala` builds `template/` (what Copier reads) from both.
 
-## How the app is put together
 
 | Module | What it is |
 |---|---|
@@ -101,7 +163,7 @@ For a production build of the client, `sbt client/webDist` writes `./dist`, whic
 The client's GraphQL code is generated from `server-core/src/main/graphql/schema.graphql`. After changing the API, run
 `sbt server-core/calibanRender` to update that file; `SchemaSpec` fails until you do.
 
-## Testing
+### Testing
 ```bash
 sbt test       # incremental in sbt 2: reruns only the tests whose code changed
 sbt testFull   # everything
@@ -114,9 +176,20 @@ sbt testFull   # everything
 
 Everything compiles with `-Werror` and `-Yexplicit-nulls`.
 
-## Production
+### Production
 The server uses sbt-native-packager (`sbt server-ziohttp/Debian/packageBin` builds a Debian package with a systemd
 service). Packaging choices (Docker, systemd, none) will be a template question.
+
+### Releasing
+
+1. Regenerate the template and check it: `scala-cli run --server=false scripts/MakeTemplate.scala`, then
+   `python3 tests/check-ai-docs.py static`. Commit `template/` with the change that produced it.
+2. Make sure CI is green, and run the client checks CI can't: see "What CI doesn't cover" in `tests/README.md`.
+3. Add the release to `CHANGELOG.md`, set the same version in `claude-plugin/.claude-plugin/plugin.json`, and check
+   the plugin with `claude plugin validate .` and `claude plugin validate claude-plugin`.
+4. Tag it (`git tag v0.1.0`). Copier offers the latest tag to new projects, `copier update` moves existing ones to it,
+   and the plugin's skill uses the latest tag too.
+
 
 ## Acknowledgements
 - This [blog post](https://scalac.io/making-zio-akka-slick-play-together-nicely-part-1-zio-and-slick/) uses a stack that's very similar to the one described here, I borrowed from it extensively, mostly in it's use of zio.

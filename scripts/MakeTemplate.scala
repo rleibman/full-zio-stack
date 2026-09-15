@@ -57,6 +57,7 @@ object MakeTemplate {
       skip("build.sbt"),
       skip("README.md"),
       skip("CLAUDE.md"),
+      skip("CHANGELOG.md"),
       skip("LICENSE"),
       skip(".gitignore"),
       skip("docker-compose.yml"),

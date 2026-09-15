@@ -13,6 +13,7 @@ construction; the plan (local and gitignored) is at `.claude/plans/copier-templa
 | `template/` | **Generated. Never edit by hand.** Copier's `_subdirectory` |
 | `copier.yml` | Template questions |
 | `claude-plugin/` + `.claude-plugin/marketplace.json` | Claude Code plugin with the `full-zio-stack` skill, which generates projects from this template |
+| `CHANGELOG.md` | What each template version changes: `copier update` users read it. Add to it with every user-visible change |
 | `tests/` | Scripts that test what the template generates (see `tests/README.md`); `.github/workflows/ci.yml` runs them |
 
 ## Rules
