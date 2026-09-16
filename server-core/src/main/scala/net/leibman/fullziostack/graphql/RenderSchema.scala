@@ -30,7 +30,8 @@ object RenderSchema {
     args.toList match {
       case file :: Nil =>
         val path = Path.of(file).nn
-        Files.createDirectories(path.getParent)
+        // A bare file name has no parent directory, and getParent is null for it.
+        Option(path.getParent).foreach(directory => Files.createDirectories(directory))
         Files.writeString(path, ApiDefinition.api.render)
         println(s"Wrote $path")
       case _ => sys.error("Usage: RenderSchema <schema file>")

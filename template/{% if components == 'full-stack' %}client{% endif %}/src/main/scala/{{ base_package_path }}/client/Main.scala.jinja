@@ -6,10 +6,14 @@ import org.scalajs.dom
 object Main {
 
   def main(args: Array[String]): Unit = {
+    // getElementById answers null when index.html has no such element, and React's own error for that ("Target
+    // container is not a DOM element") doesn't say which element is missing.
+    val container = Option(dom.document.getElementById("container"))
+      .getOrElse(sys.error("index.html has no element with id 'container', so the client has nowhere to render"))
     // React 19 removed ReactDOM.render (renderIntoDOM); roots are created explicitly now.
     // AuthGate renders the application as it is, unless the project was generated with authentication, in which case
     // it asks whoever is at the browser to log in first.
-    ReactDOMClient.createRoot(dom.document.getElementById("container")).render(AuthGate(App()))
+    ReactDOMClient.createRoot(container).render(AuthGate(App()))
     ()
   }
 

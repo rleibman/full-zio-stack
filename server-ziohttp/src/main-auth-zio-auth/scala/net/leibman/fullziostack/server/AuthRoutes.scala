@@ -34,7 +34,10 @@ object AuthRoutes {
         case InvalidToken(message, _)   => Response.error(Status.Unauthorized, message)
         case NotAuthenticated           => Response.unauthorized
         case AuthBadRequest(message, _) => Response.error(Status.BadRequest, message)
-        case EmailAlreadyExists(email)  => Response.error(Status.Conflict, email)
+        // Deliberately says nothing about which address, or why: this message carries either the submitted email or
+        // the database's own constraint error. The status still tells an attacker the address is taken -- removing
+        // that would mean answering every registration with "check your email", which is zio-auth's flow to change.
+        case EmailAlreadyExists(_) => Response.error(Status.Conflict, "That email address cannot be registered")
         // Anything else is a bug or a broken dependency: say so without leaking its details to the caller.
         case _ => Response.internalServerError
       }
