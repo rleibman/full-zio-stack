@@ -1,0 +1,90 @@
+/*
+ * Copyright (c) 2024 Roberto Leibman
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+ * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+package net.leibman.fullziostack.ai
+
+import net.leibman.fullziostack.config.AiConfig
+import zio.*
+
+/** Text generation, for the app's AI features. */
+trait AiService {
+
+  /** A short description for something with this name, e.g. to prefill a form. */
+  def suggestDescription(name: String): IO[AiError, String]
+
+}
+
+sealed abstract class AiError(
+  message: String,
+  cause:   Option[Throwable]
+) extends Exception(message, cause.orNull)
+
+object AiError {
+
+  /** No provider is configured (`app.ai.provider = none`). */
+  final case class NotConfigured(message: String) extends AiError(message, None)
+
+  /** The provider rejected the request, timed out, or wasn't reachable. */
+  final case class Unavailable(
+    message: String,
+    cause:   Option[Throwable] = None
+  ) extends AiError(message, cause)
+
+}
+
+object AiService {
+
+  /** The service described by the configuration: a langchain4j model, or one that reports it isn't configured.
+    *
+    * Configuration mistakes (a missing API key, say) must not stop the server from starting, so they turn into a
+    * service whose calls explain the problem.
+    */
+  val live: RLayer[AiConfig, AiService] = ZLayer {
+    for {
+      config <- ZIO.service[AiConfig]
+      service <- ZIO
+        .attempt(ChatModels.create(config))
+        .foldZIO(
+          error =>
+            ZIO
+              .logWarning(s"AI is off: the ${config.provider} model could not be built (${error.getMessage})")
+              .as(NotConfiguredAiService(s"AI is not available: ${config.provider} is configured but ${error.getMessage}")),
+          {
+            case Some(model) => ZIO.logInfo(s"AI: ${config.provider} model ${config.model}").as(Langchain4jAiService(model))
+            case None        =>
+              val explanation =
+                if (config.provider == "none")
+                  "AI is not configured: set app.ai.provider (anthropic, openai or ollama) and its model"
+                else s"AI is not configured: unknown provider '${config.provider}'"
+              ZIO.succeed(NotConfiguredAiService(explanation))
+          }
+        )
+    } yield service
+  }
+
+}
+
+/** What AI features get when AI isn't available: every call fails with a message that says why. */
+final case class NotConfiguredAiService(explanation: String) extends AiService {
+
+  override def suggestDescription(name: String): IO[AiError, String] = ZIO.fail(AiError.NotConfigured(explanation))
+
+}

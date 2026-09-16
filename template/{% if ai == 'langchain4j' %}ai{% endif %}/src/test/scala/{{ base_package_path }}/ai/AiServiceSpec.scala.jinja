@@ -1,0 +1,45 @@
+package {{ base_package }}.ai
+
+import dev.langchain4j.model.chat.ChatModel
+import {{ base_package }}.config.AiConfig
+import zio.*
+import zio.test.*
+import zio.test.Assertion.*
+
+/** The AI service, against a stub model: no provider is called. */
+object AiServiceSpec extends ZIOSpecDefault {
+
+  /** Answers with the prompt it was given, so the test can look at it. */
+  private val echoModel: ChatModel = new ChatModel {
+    override def chat(userMessage: String): String = s"Echo: $userMessage"
+  }
+
+  override def spec: Spec[TestEnvironment & Scope, Any] =
+    suite("AiService")(
+      test("asks the model for a one-sentence description of the name") {
+        for {
+          answer <- Langchain4jAiService(echoModel).suggestDescription("Blue widget")
+        } yield assertTrue(answer.startsWith("Echo:"), answer.contains("Blue widget"), answer.contains("one sentence"))
+      },
+      test("without a provider, every call says so") {
+        for {
+          service <- ZIO.service[AiService].provide(ZLayer.succeed(AiConfig()) >>> AiService.live)
+          failure <- service.suggestDescription("Blue widget").exit
+        } yield assert(failure)(fails(isSubtype[AiError.NotConfigured](anything)))
+      },
+      test("a provider that can't be built (no API key, say) leaves the server running, with AI off") {
+        for {
+          // anthropic without an API key: langchain4j throws while building the model.
+          service <- ZIO.service[AiService].provide(ZLayer.succeed(AiConfig(provider = "anthropic", model = "claude-sonnet-5")) >>> AiService.live)
+          failure <- service.suggestDescription("Blue widget").exit
+        } yield assert(failure)(fails(isSubtype[AiError.NotConfigured](anything)))
+      },
+      test("an unknown provider is reported as not configured") {
+        for {
+          service <- ZIO.service[AiService].provide(ZLayer.succeed(AiConfig(provider = "hal9000")) >>> AiService.live)
+          failure <- service.suggestDescription("Blue widget").exit
+        } yield assert(failure)(fails(isSubtype[AiError.NotConfigured](anything)))
+      }
+    )
+
+}

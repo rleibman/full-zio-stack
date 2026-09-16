@@ -34,7 +34,7 @@ object SchemaSpec extends ZIOSpecDefault {
       for {
         file      <- ZIO.succeed(Option(java.lang.System.getProperty("schema.file"))).someOrFailException
         committed <- ZIO.attemptBlocking(Files.readString(Path.of(file)))
-      } yield assertTrue(committed == FullZIOStackApi.api.render)
+      } yield assertTrue(committed == ApiDefinition.api.render)
     }
 
 }

@@ -26,8 +26,8 @@ import caliban.{CalibanError, Http4sAdapter}
 import cats.syntax.all.*
 import fs2.io.file.{Files as Fs2Files, Path as Fs2Path}
 import net.leibman.fullziostack.config.HttpConfig
-import net.leibman.fullziostack.db.ZIORepository
-import net.leibman.fullziostack.graphql.FullZIOStackApi
+import net.leibman.fullziostack.graphql.ApiDefinition
+import net.leibman.fullziostack.graphql.ApiDefinition.ApiEnvironment
 import org.http4s.*
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.Router
@@ -39,7 +39,7 @@ import java.nio.file.{Files, Path as FilePath}
 object ApiRoutes {
 
   /** The effect every route runs in: the GraphQL routes need the service, so the others run there too. */
-  type F[A] = RIO[ZIORepository, A]
+  type F[A] = RIO[ApiEnvironment, A]
 
   // fs2 3.7 deprecated deriving this from Async, which -Werror turns into an error.
   private given Fs2Files[F] = Fs2Files.forAsync[F]
@@ -48,10 +48,10 @@ object ApiRoutes {
   import dsl.*
 
   /** GraphQL at /api/graphql, GraphiQL at /api/graphiql, /health, and the client's static files. */
-  def routes(http: HttpConfig): ZIO[ZIORepository, Throwable, HttpApp[F]] =
-    FullZIOStackApi.api.interpreter.map { interpreter =>
+  def routes(http: HttpConfig): ZIO[ApiEnvironment, Throwable, HttpApp[F]] =
+    ApiDefinition.api.interpreter.map { interpreter =>
       Router[F](
-        "/api/graphql"  -> Http4sAdapter.makeHttpService[ZIORepository, CalibanError](HttpInterpreter(interpreter)),
+        "/api/graphql"  -> Http4sAdapter.makeHttpService[ApiEnvironment, CalibanError](HttpInterpreter(interpreter)),
         "/api/graphiql" -> Http4sAdapter.makeGraphiqlService[F]("/api/graphql"),
         "/"             -> (health <+> staticFiles(FilePath.of(http.staticContentDir).nn))
       ).orNotFound

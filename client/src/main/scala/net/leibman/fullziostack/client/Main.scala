@@ -28,7 +28,9 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     // React 19 removed ReactDOM.render (renderIntoDOM); roots are created explicitly now.
-    ReactDOMClient.createRoot(dom.document.getElementById("container")).render(App())
+    // AuthGate renders the application as it is, unless the project was generated with authentication, in which case
+    // it asks whoever is at the browser to log in first.
+    ReactDOMClient.createRoot(dom.document.getElementById("container")).render(AuthGate(App()))
     ()
   }
 

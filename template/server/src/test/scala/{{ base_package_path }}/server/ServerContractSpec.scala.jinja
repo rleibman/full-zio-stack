@@ -2,6 +2,7 @@ package {{ base_package }}.server
 
 import {{ base_package }}.config.{AppConfig, HttpConfig}
 import {{ base_package }}.db.DatabaseConfig
+import {{ base_package }}.telemetry.TelemetryConfig
 import {{ base_package }}.server.AppLayers.AppEnvironment
 import zio.*
 import zio.json.*
@@ -87,7 +88,9 @@ abstract class ServerContractSpec extends ZIOSpecDefault {
     staticFiles.flatMap { static =>
       val config = AppConfig(
         http = HttpConfig(host = "127.0.0.1", port = 0, staticContentDir = static.get.toString),
-        db = DatabaseConfig(url = "unused", migrationsLocation = "unused")
+        db = DatabaseConfig(url = "unused", migrationsLocation = "unused"),
+        // No endpoint: spans go to a tracer that records nothing.
+        telemetry = TelemetryConfig(serviceName = "server-contract")
       )
       // The client is released before the server, so no idle keep-alive connection holds up the server's graceful
       // shutdown.

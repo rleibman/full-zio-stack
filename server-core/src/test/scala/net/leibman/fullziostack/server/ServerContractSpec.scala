@@ -23,6 +23,7 @@ package net.leibman.fullziostack.server
 
 import net.leibman.fullziostack.config.{AppConfig, HttpConfig}
 import net.leibman.fullziostack.db.DatabaseConfig
+import net.leibman.fullziostack.telemetry.TelemetryConfig
 import net.leibman.fullziostack.server.AppLayers.AppEnvironment
 import zio.*
 import zio.json.*
@@ -108,7 +109,9 @@ abstract class ServerContractSpec extends ZIOSpecDefault {
     staticFiles.flatMap { static =>
       val config = AppConfig(
         http = HttpConfig(host = "127.0.0.1", port = 0, staticContentDir = static.get.toString),
-        db = DatabaseConfig(url = "unused", migrationsLocation = "unused")
+        db = DatabaseConfig(url = "unused", migrationsLocation = "unused"),
+        // No endpoint: spans go to a tracer that records nothing.
+        telemetry = TelemetryConfig(serviceName = "server-contract")
       )
       // The client is released before the server, so no idle keep-alive connection holds up the server's graceful
       // shutdown.

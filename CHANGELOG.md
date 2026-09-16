@@ -8,7 +8,7 @@ earlier version.
 The first release as a [Copier](https://copier.readthedocs.io/) template.
 
 **Choices:** full-stack or server-only; zio-http or http4s; MariaDB, MySQL, PostgreSQL or SQLite; Quill, doobie or
-Slick; Docker, Debian/systemd or no packaging; GitHub Actions or no CI; MIT, Apache-2.0, BSD-3-Clause, GPL-3.0 or
+Slick; AI (langchain4j) or none; authentication (zio-auth) or none; Docker, Debian/systemd or no packaging; GitHub Actions or no CI; MIT, Apache-2.0, BSD-3-Clause, GPL-3.0 or
 proprietary license.
 
 **Generated projects have:**
@@ -23,6 +23,13 @@ proprietary license.
 - Tests: a generic CRUD contract run against an in-memory mock and a real database (testcontainers, or a temporary
   file for SQLite), an HTTP contract run against the real server, and a check that the committed GraphQL schema is
   current.
+- Optional AI (langchain4j): an `AiService` and a `suggestDescription` GraphQL mutation, with Anthropic, OpenAI or
+  Ollama chosen by configuration rather than at generation time.
+- Optional authentication (zio-auth): login, registration with an emailed confirmation, password recovery and JWT
+  sessions, over a `UserStore` of users and PBKDF2 password hashes, with the login screens in the client. It needs
+  the zio-http server, and a `GITHUB_TOKEN` with `read:packages` to resolve zio-auth from GitHub Packages.
+- OpenTelemetry tracing (zio-telemetry): a span per GraphQL operation, exported over OTLP when
+  `app.telemetry.endpoint` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) is set, and a no-op tracer otherwise.
 - `AGENTS.md`, `CLAUDE.md` and an `add-entity` skill for AI agents.
 - A development `docker-compose.yml`, a README, a LICENSE, and CI.
 

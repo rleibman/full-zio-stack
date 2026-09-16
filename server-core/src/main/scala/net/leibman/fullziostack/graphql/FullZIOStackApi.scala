@@ -33,6 +33,8 @@ import net.leibman.fullziostack.db.{DataIO, ZIORepository}
 import net.leibman.fullziostack.model.*
 import net.leibman.fullziostack.repository.RepositoryError
 import net.leibman.fullziostack.server.BuildInfo
+import net.leibman.fullziostack.telemetry.Telemetry
+import zio.telemetry.opentelemetry.tracing.Tracing
 import zio.*
 
 import scala.language.postfixOps
@@ -123,7 +125,7 @@ object FullZIOStackApi {
   given Schema[ZIORepository, Queries] = ApiSchema.gen[ZIORepository, Queries]
   given Schema[ZIORepository, Mutations] = ApiSchema.gen[ZIORepository, Mutations]
 
-  lazy val api: GraphQL[ZIORepository] =
+  lazy val api: GraphQL[ZIORepository & Tracing] =
     graphQL(
       RootResolver(
         Queries(
@@ -141,7 +143,8 @@ object FullZIOStackApi {
           deleteModelObject = args => withRepository(_.modelObjectOps.delete(args.id, args.softDelete))
         )
       )
-    ) @@ maxFields(200) // query analyzer that limit query fields
+    ) @@ Telemetry.graphqlSpans // a span per GraphQL operation (exported only when an OTLP endpoint is configured)
+      @@ maxFields(200) // query analyzer that limit query fields
       @@ maxDepth(30) // query analyzer that limit query depth
       @@ timeout(3 seconds) // wrapper that fails slow queries
       @@ printSlowQueries(500 millis) // wrapper that logs slow queries

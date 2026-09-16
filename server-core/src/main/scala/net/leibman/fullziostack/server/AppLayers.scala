@@ -23,25 +23,39 @@ package net.leibman.fullziostack.server
 
 import net.leibman.fullziostack.config.AppConfig
 import net.leibman.fullziostack.db.{DataSources, MockRepository, ZIORepository}
+import net.leibman.fullziostack.graphql.ApiDefinition
+import net.leibman.fullziostack.telemetry.Telemetry
+import zio.telemetry.opentelemetry.tracing.Tracing
 import zio.*
 import zio.logging.backend.SLF4J
+
+import javax.sql.DataSource
 
 /** How the application is wired, independent of the HTTP server. */
 object AppLayers {
 
   /** Everything the HTTP servers need. */
-  type AppEnvironment = AppConfig & ZIORepository
+  type AppEnvironment = AppConfig & ApiDefinition.ApiEnvironment & AuthModule.Env
 
-  /** Config → DataSource (pooled, migrated, closed on shutdown) → repository. */
-  val live: TaskLayer[AppEnvironment] = ZLayer.make[AppEnvironment](
+  /** Config → DataSource (pooled, migrated, closed on shutdown) → repository, plus tracing and whatever the variants
+    * add (the AI service, in projects generated with AI; zio-auth, in projects generated with authentication). The
+    * DataSource is part of the result because authentication keeps its users in the same database.
+    */
+  private val base: TaskLayer[AppConfig & ZIORepository & Tracing & DataSource] = ZLayer.make[AppConfig & ZIORepository & Tracing & DataSource](
     AppConfig.live,
     AppConfig.database,
     DataSources.live,
-    ZIORepository.live
+    ZIORepository.live,
+    AppConfig.telemetry,
+    Telemetry.live
   )
 
+  val live: TaskLayer[AppEnvironment] = base ++ (base >>> ApiDefinition.extraLayers) ++ (base >>> AuthModule.layers)
+
   /** The same, over in-memory data: for tests, or for running without a database. */
-  def mock(config: AppConfig): ULayer[AppEnvironment] = ZLayer.succeed(config) ++ MockRepository.live
+  def mock(config: AppConfig): TaskLayer[AppEnvironment] =
+    ZLayer.succeed(config) ++ MockRepository.live ++ (ZLayer.succeed(config.telemetry) >>> Telemetry.live) ++
+      (ZLayer.succeed(config) >>> ApiDefinition.extraLayers) ++ (ZLayer.succeed(config) >>> AuthModule.mockLayers)
 
   /** Sends ZIO's log output through SLF4J (configured by logback.xml). */
   val logging: ZLayer[Any, Nothing, Unit] = Runtime.removeDefaultLoggers >>> SLF4J.slf4j

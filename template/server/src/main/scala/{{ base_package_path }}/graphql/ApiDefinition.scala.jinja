@@ -1,0 +1,25 @@
+package {{ base_package }}.graphql
+
+import caliban.GraphQL
+import {{ base_package }}.db.ZIORepository
+import zio.telemetry.opentelemetry.tracing.Tracing
+
+/** The GraphQL API the server serves: the application's own, plus whatever the optional features add.
+  *
+  * Each optional feature has a module object with the same name in one file per choice (AiModule, and AuthModule in
+  * projects generated with authentication), so features compose without a file per combination.
+  */
+object ApiDefinition {
+
+  /** Everything the API needs: the repository and tracing, plus the optional features' environments (`Any` when a
+    * feature is off, which adds nothing to the intersection).
+    */
+  type ApiEnvironment = ZIORepository & Tracing & AiModule.Env
+
+  val api: GraphQL[ApiEnvironment] =
+    AiModule.apis.foldLeft[GraphQL[ApiEnvironment]]({{ class_prefix }}Api.api)(_ |+| _)
+
+  /** Layers the optional features need, built from the application's configuration. */
+  val extraLayers = AiModule.layers
+
+}

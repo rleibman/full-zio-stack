@@ -17,6 +17,49 @@ app {
     staticContentDir = ${?STATIC_CONTENT_DIR}
   }
 
+  telemetry {
+    serviceName = "{{ project_slug }}"
+    # OTLP/HTTP endpoint of a collector, e.g. http://localhost:4318. Empty: spans are recorded by a no-op tracer and
+    # nothing is exported.
+    endpoint = ""
+    endpoint = ${?OTEL_EXPORTER_OTLP_ENDPOINT}
+  }
+
+{%- if auth == 'zio-auth' %}
+  auth {
+    # Signs the session tokens. Empty means "generate one at startup", which is fine while you develop but logs
+    # everyone out on every restart, so set AUTH_SECRET in production. Anyone who knows it can forge a session.
+    secret = ""
+    secret = ${?AUTH_SECRET}
+    # Where the client is reachable; the links in registration and password-recovery emails point here.
+    webHostUrl = "http://localhost:{{ http_port }}"
+    webHostUrl = ${?WEB_HOST_URL}
+    # How long a session lasts before the client refreshes it, and how long it can be refreshed for.
+    sessionMinutes = 60
+    refreshMinutes = 1440
+    # false so that logging in over plain http works in development. Set it in production, behind https.
+    secureCookie = false
+  }
+
+{% endif %}
+{%- if ai == 'langchain4j' %}
+  ai {
+    # anthropic, openai, ollama, or none to switch the AI features off.
+    provider = "{{ ai_provider }}"
+    provider = ${?AI_PROVIDER}
+    model = "{{ ai_model }}"
+    model = ${?AI_MODEL}
+{%- if ai_provider != 'ollama' %}
+    # Keep the key out of this file:
+    apiKey = ${?AI_API_KEY}
+{%- else %}
+    # Where Ollama is listening.
+    baseUrl = "http://localhost:11434"
+    baseUrl = ${?AI_BASE_URL}
+{%- endif %}
+  }
+
+{% endif %}
   db {
 {%- if database == 'sqlite' %}
     # WAL lets readers work while the (single) writer writes; busy_timeout waits for locks instead of failing.

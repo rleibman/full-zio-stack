@@ -12,6 +12,9 @@ everything but the client). The scripts here test what the template *generates*.
 | `update-roundtrip.sh <from> <to> [--data ...]` | A project generated from template version `<from>` updates to `<to>` without conflicts and still builds. | CI, once there are two `v*` tags |
 | `ui-check.mjs [url] [screenshot dir]` | In headless Chrome: the page renders, a ModelObject can be created through the dialog and shows up in the table, no console errors. | `node tests/ui-check.mjs` |
 
+Generating with `--data auth=zio-auth` needs `GITHUB_TOKEN` exported (a token with `read:packages`): zio-auth is
+published to GitHub Packages, so the build cannot even resolve it otherwise.
+
 All scripts use `copier` from the `PATH`; set `COPIER="pipx run --spec copier copier"` (or `uvx copier`) if it isn't
 installed. They generate from this repository, uncommitted changes included, unless `TEMPLATE` points elsewhere.
 

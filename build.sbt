@@ -10,6 +10,15 @@ import org.apache.commons.io.FileUtils
 import org.scalajs.linker.interface.ModuleSplitStyle
 
 ThisBuild / resolvers += Resolver.sonatypeCentralSnapshots
+// zio-auth (the auth=zio-auth variant) is published to GitHub Packages, which needs a token even to read: set
+// GITHUB_TOKEN to a personal access token with read:packages. Generated projects without authentication need neither.
+ThisBuild / resolvers += "GitHub Packages rleibman/zio-auth" at "https://maven.pkg.github.com/rleibman/zio-auth"
+ThisBuild / credentials += Credentials(
+  "GitHub Package Registry",
+  "maven.pkg.github.com",
+  sys.env.getOrElse("GITHUB_ACTOR", "rleibman"),
+  sys.env.getOrElse("GITHUB_TOKEN", "")
+)
 
 lazy val SCALA = "3.9.0"
 Global / onChangedBuildSource := ReloadOnSourceChanges
@@ -221,6 +230,21 @@ lazy val dbVariants: Seq[ProjectReference] = Seq(
 )
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
+// AI: the service and its GraphQL fragment. Only in projects generated with ai=langchain4j; the provider
+// (anthropic, openai, ollama) is configuration, not a build choice.
+lazy val aiLangchain4j = project
+  .in(file("ai-langchain4j"))
+  .withId("ai-langchain4j")
+  .enablePlugins(AutomateHeaderPlugin, com.github.sbt.git.GitVersioning)
+  .dependsOn(modelJVM)
+  .settings(
+    name := "full-zio-stack-ai",
+    commonSettings,
+    testSettings,
+    libraryDependencies ++= Seq(zio, calibanCore) ++ langchain4j
+  )
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
 // Server core: config, the GraphQL API and service layer, and the layer wiring. Independent of the HTTP server.
 // Depends on the default DB variant so the app runs; the others are proven by their own contract tests.
 lazy val serverCore = project
@@ -233,7 +257,7 @@ lazy val serverCore = project
     buildInfoPackage := "net.leibman.fullziostack.server",
     commonSettings,
     testSettings,
-    libraryDependencies ++= Seq(zio, calibanCore) ++ zioConfig ++ logging,
+    libraryDependencies ++= Seq(zio, calibanCore) ++ zioConfig ++ logging ++ telemetry,
     calibanRender := Def.uncached {
       Def.taskDyn {
         val schemaFile = baseDirectory.value / "src" / "main" / "graphql" / "schema.graphql"
@@ -241,7 +265,69 @@ lazy val serverCore = project
       }.value
     },
     // SchemaSpec compares the committed schema with the current API.
-    Test / javaOptions += s"-Dschema.file=${baseDirectory.value / "src" / "main" / "graphql" / "schema.graphql"}"
+    Test / javaOptions += s"-Dschema.file=${baseDirectory.value / "src" / "main" / "graphql" / "schema.graphql"}",
+    // This project is the ai=none and auth=none variant; server-core-ai and server-core-auth below are the others.
+    Compile / unmanagedSourceDirectories += baseDirectory.value / "src" / "main-ai-none" / "scala",
+    Compile / unmanagedSourceDirectories += baseDirectory.value / "src" / "main-auth-none" / "scala"
+  )
+
+/** server-core as generated with `ai=langchain4j`: the same sources, with the AI variant's ApiDefinition and its own
+  * committed schema. Nothing depends on it; it exists so that variant is compiled and its schema kept current.
+  */
+lazy val serverCoreAi = Project("server-core-ai", file("server-core") / ".variants" / "ai-langchain4j")
+  .enablePlugins(com.github.sbt.git.GitVersioning, BuildInfoPlugin)
+  .dependsOn(modelJVM, dbCore % "compile->compile;test->test", dbQuillMariadb, aiLangchain4j)
+  .settings(
+    name             := "full-zio-stack-server-core-ai",
+    buildInfoPackage := "net.leibman.fullziostack.server",
+    commonSettings,
+    testSettings,
+    ideSkipProject := true,
+    libraryDependencies ++= Seq(zio, calibanCore) ++ zioConfig ++ logging ++ telemetry,
+    Compile / unmanagedSourceDirectories := {
+      val serverCoreDir = (ThisBuild / baseDirectory).value / "server-core"
+      Seq(
+        serverCoreDir / "src" / "main" / "scala",
+        serverCoreDir / "src" / "main-ai-langchain4j" / "scala",
+        serverCoreDir / "src" / "main-auth-none" / "scala"
+      )
+    },
+    Compile / unmanagedResourceDirectories := Seq((ThisBuild / baseDirectory).value / "server-core" / "src" / "main" / "resources"),
+    Test / unmanagedSourceDirectories      := Seq((ThisBuild / baseDirectory).value / "server-core" / "src" / "test" / "scala"),
+    calibanRender := Def.uncached {
+      Def.taskDyn {
+        val schemaFile =
+          (ThisBuild / baseDirectory).value / "server-core" / "src" / "main-ai-langchain4j" / "graphql" / "schema.graphql"
+        (Compile / runMain).toTask(s" net.leibman.fullziostack.graphql.RenderSchema $schemaFile")
+      }.value
+    },
+    Test / javaOptions += s"-Dschema.file=${(ThisBuild / baseDirectory).value / "server-core" / "src" / "main-ai-langchain4j" / "graphql" / "schema.graphql"}"
+  )
+
+/** server-core as generated with `auth=zio-auth`: the same sources, with the zio-auth variant of AuthModule. Nothing
+  * depends on it; it exists, with server-ziohttp-auth below, so that variant is compiled and tested.
+  */
+lazy val serverCoreAuth = Project("server-core-auth", file("server-core") / ".variants" / "auth-zio-auth")
+  .enablePlugins(com.github.sbt.git.GitVersioning, BuildInfoPlugin)
+  .dependsOn(modelJVM, dbCore % "compile->compile;test->test", dbQuillMariadb)
+  .settings(
+    name             := "full-zio-stack-server-core-auth",
+    buildInfoPackage := "net.leibman.fullziostack.server",
+    commonSettings,
+    testSettings,
+    ideSkipProject := true,
+    libraryDependencies ++= Seq(zio, calibanCore) ++ zioConfig ++ logging ++ telemetry ++ zioAuth,
+    Compile / unmanagedSourceDirectories := {
+      val serverCoreDir = (ThisBuild / baseDirectory).value / "server-core"
+      Seq(
+        serverCoreDir / "src" / "main" / "scala",
+        serverCoreDir / "src" / "main-ai-none" / "scala",
+        serverCoreDir / "src" / "main-auth-zio-auth" / "scala"
+      )
+    },
+    Compile / unmanagedResourceDirectories := Seq((ThisBuild / baseDirectory).value / "server-core" / "src" / "main" / "resources"),
+    Test / unmanagedSourceDirectories      := Seq((ThisBuild / baseDirectory).value / "server-core" / "src" / "test" / "scala"),
+    Test / javaOptions += s"-Dschema.file=${(ThisBuild / baseDirectory).value / "server-core" / "src" / "main" / "graphql" / "schema.graphql"}"
   )
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -262,6 +348,8 @@ def httpServer(server: String): Project =
       commonSettings,
       testSettings,
       libraryDependencies ++= serverLibraries(server),
+      // These are the auth=none variants; server-ziohttp-auth below is the other one.
+      Compile / unmanagedSourceDirectories += baseDirectory.value / "src" / "main-auth-none" / "scala",
       // Run from the repository root, so the relative staticContentDir (dist/ or debugDist/) resolves.
       run / fork          := true,
       run / baseDirectory := (ThisBuild / baseDirectory).value
@@ -269,6 +357,30 @@ def httpServer(server: String): Project =
 
 lazy val serverZiohttp = httpServer("zio-http")
 lazy val serverHttp4s = httpServer("http4s")
+
+/** server-ziohttp as generated with `auth=zio-auth`: the same sources, mounting zio-auth's routes. Authentication needs
+  * zio-http (zio-auth's routes are zio-http routes), which is why there is no http4s counterpart.
+  */
+lazy val serverZiohttpAuth = Project("server-ziohttp-auth", file("server-ziohttp") / ".variants" / "auth-zio-auth")
+  .enablePlugins(com.github.sbt.git.GitVersioning)
+  .dependsOn(serverCoreAuth % "compile->compile;test->test")
+  .settings(
+    name := "full-zio-stack-server-ziohttp-auth",
+    commonSettings,
+    testSettings,
+    ideSkipProject := true,
+    libraryDependencies ++= serverLibraries("zio-http") ++ zioAuth,
+    Compile / unmanagedSourceDirectories := {
+      val serverDir = (ThisBuild / baseDirectory).value / "server-ziohttp"
+      Seq(serverDir / "src" / "main" / "scala", serverDir / "src" / "main-auth-zio-auth" / "scala")
+    },
+    Compile / unmanagedResourceDirectories := Seq((ThisBuild / baseDirectory).value / "server-ziohttp" / "src" / "main" / "resources"),
+    Test / unmanagedSourceDirectories := {
+      val serverDir = (ThisBuild / baseDirectory).value / "server-ziohttp"
+      Seq(serverDir / "src" / "test" / "scala", serverDir / "src" / "test-auth-zio-auth" / "scala")
+    },
+    Test / unmanagedResourceDirectories := Seq((ThisBuild / baseDirectory).value / "server-ziohttp" / "src" / "test" / "resources")
+  )
 
 ////////////////////////////////////////////////////////////////////////////////////
 // Web
@@ -349,7 +461,8 @@ lazy val client = project
       "com.github.japgolly.scalajs-react" %% "core"  % V.scalajsReact,
       "com.github.japgolly.scalajs-react" %% "extra" % V.scalajsReact
     ),
-    Compile / unmanagedSourceDirectories := Seq((Compile / scalaSource).value),
+    // This is the auth=none variant; client-auth below is the other one.
+    Compile / unmanagedSourceDirectories := Seq((Compile / scalaSource).value, baseDirectory.value / "src" / "main-auth-none" / "scala"),
     Test / unmanagedSourceDirectories    := Seq((Test / scalaSource).value),
     // scalajs-react's StBuildingComponent is `inline`, so its body -- including a call to the deprecated
     // scala.scalajs.runtime.linkingInfo -- is reported at every one of our call sites. Nothing here can fix it.
@@ -391,6 +504,40 @@ lazy val client = project
     }
   )
 
+/** The client as generated with `auth=zio-auth`: the same sources, with zio-auth's login screens in front of the
+  * application (see AuthGate). Nothing depends on it; it exists so that variant is compiled. Linking it is the
+  * client's slowest step and nothing here needs it, so this project only compiles.
+  */
+lazy val clientAuth = Project("client-auth", file("client") / ".variants" / "auth-zio-auth")
+  .dependsOn(modelJS)
+  .settings(commonSettings)
+  .enablePlugins(com.github.sbt.git.GitVersioning, ScalaJSPlugin, CalibanPlugin)
+  .settings(
+    name           := "full-zio-stack-web-auth",
+    ideSkipProject := true,
+    Compile / caliban / calibanSources := (serverCore / baseDirectory).value / "src" / "main" / "graphql",
+    Compile / caliban / calibanSettings += calibanSetting((serverCore / baseDirectory).value / "src" / "main" / "graphql" / "schema.graphql")(
+      _.clientName("FullZIOStackClient").packageName("net.leibman.fullziostack.client.api")
+    ),
+    libraryDependencies ++= clientLibraries ++ scalaJavaTime ++ Seq(
+      "net.leibman" % "full-zio-stack-stlib_sjs1_3" % stlibVersion,
+      zioAuthClient
+    ),
+    dependencyOverrides ++= Seq(
+      "com.github.japgolly.scalajs-react" %% "core"  % V.scalajsReact,
+      "com.github.japgolly.scalajs-react" %% "extra" % V.scalajsReact
+    ),
+    Compile / unmanagedSourceDirectories := {
+      val clientDir = (ThisBuild / baseDirectory).value / "client"
+      Seq(clientDir / "src" / "main" / "scala", clientDir / "src" / "main-auth-zio-auth" / "scala")
+    },
+    Compile / unmanagedResourceDirectories := Seq((ThisBuild / baseDirectory).value / "client" / "src" / "main" / "resources"),
+    Test / unmanagedSourceDirectories      := Seq((ThisBuild / baseDirectory).value / "client" / "src" / "test" / "scala"),
+    scalacOptions += "-Wconf:msg=linkingInfo in package scala.scalajs.runtime is deprecated:s",
+    scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.ESModule)),
+    Compile / scalaJSUseMainModuleInitializer := false
+  )
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Everything but the client, which needs the ScalablyTyped facades from stLib/ (built with a locally published
 // converter that CI doesn't have).
@@ -403,11 +550,18 @@ addCommandAlias(
     } yield s"db-$layer-$database")).map(project => s"$project/testFull").mkString("; ", "; ", ""),
 )
 
+// The auth=zio-auth variants, which are separate because building them needs a GITHUB_TOKEN (zio-auth is published
+// to GitHub Packages).
+addCommandAlias("testAuth", "; server-core-auth/testFull; server-ziohttp-auth/testFull")
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Root project
 lazy val root = project
   .in(file("."))
-  .aggregate((Seq[ProjectReference](modelJVM, modelJS, dbCore, serverCore, serverZiohttp, serverHttp4s, client) ++ dbVariants) *)
+  .aggregate(
+    (Seq[ProjectReference](modelJVM, modelJS, dbCore, aiLangchain4j, serverCore, serverCoreAi, serverZiohttp, serverHttp4s, client) ++
+      dbVariants) *
+  )
   .settings(
     name           := "full-zio-stack",
     publish / skip := true,

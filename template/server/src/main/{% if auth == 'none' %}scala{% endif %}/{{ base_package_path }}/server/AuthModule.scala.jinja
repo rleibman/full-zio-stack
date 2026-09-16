@@ -1,0 +1,22 @@
+package {{ base_package }}.server
+
+import {{ base_package }}.config.AppConfig
+import zio.*
+
+import javax.sql.DataSource
+
+/** What authentication adds to the application: nothing, in a project generated without it.
+  *
+  * The zio-auth variant of this file (`src/main-auth-zio-auth/` in the template) has the documentation; nothing else in
+  * the application changes between the two.
+  */
+object AuthModule {
+
+  /** Added to the application's environment. `Any` adds nothing. */
+  type Env = Any
+
+  val layers: RLayer[AppConfig & DataSource, Env] = ZLayer.empty
+
+  val mockLayers: RLayer[AppConfig, Env] = ZLayer.empty
+
+}

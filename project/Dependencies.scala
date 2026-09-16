@@ -11,6 +11,8 @@ object Dependencies {
     val doobie = "1.0.0-RC12"
     val flyway = "13.7.0"
     val hikari = "7.1.0"
+    val langchain4j = "1.20.0"
+    val openTelemetry = "1.66.0"
     // caliban-http4s 3.1.5 is built against http4s 0.23.34 / cats-effect 3.7 / zio-interop-cats 23.1.0.13; move these
     // together.
     val http4s = "0.23.37"
@@ -33,6 +35,8 @@ object Dependencies {
     val zioHttp = "3.11.5"
     val zioInteropCats = "23.1.0.13"
     val zioJson = "1.1.0"
+    val zioAuth = "3.1.7"
+    val zioOpenTelemetry = "3.1.19"
     val zioLogging = "2.5.3"
 
   }
@@ -89,6 +93,32 @@ object Dependencies {
     ),
     "slick" -> Seq("com.typesafe.slick" %% "slick" % V.slick)
   )
+
+  // Tracing: OpenTelemetry through zio-telemetry. Off unless an OTLP endpoint is configured.
+  val telemetry = Seq(
+    "dev.zio"            %% "zio-opentelemetry"        % V.zioOpenTelemetry,
+    "io.opentelemetry"    % "opentelemetry-sdk"        % V.openTelemetry,
+    "io.opentelemetry"    % "opentelemetry-exporter-otlp" % V.openTelemetry,
+  )
+
+  // AI: langchain4j, with the providers the app can be configured to use.
+  val langchain4j = Seq(
+    "dev.langchain4j" % "langchain4j"           % V.langchain4j,
+    "dev.langchain4j" % "langchain4j-anthropic" % V.langchain4j,
+    "dev.langchain4j" % "langchain4j-open-ai"   % V.langchain4j,
+    "dev.langchain4j" % "langchain4j-ollama"    % V.langchain4j,
+  )
+
+  // Authentication: zio-auth (login, registration, password recovery, JWT sessions), which is published to GitHub
+  // Packages rather than Maven Central -- see the resolver and credentials in build.sbt.
+  //
+  // The artifact names are hand-suffixed on purpose: `%%`/`%%%` would derive the wrong jar name, and the JS artifact
+  // (the login screens) has a different API from the JVM one (the AuthServer), so each side names the one it wants.
+  val zioAuth = Seq(
+    "net.leibman" % "zio-auth_3" % V.zioAuth,
+    "dev.zio"    %% "zio-http"   % V.zioHttp
+  )
+  val zioAuthClient = "net.leibman" % "zio-auth_sjs1_3" % V.zioAuth
 
   // GraphQL
   val calibanCore = "com.github.ghostdogpr" %% "caliban" % V.caliban

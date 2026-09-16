@@ -1,0 +1,11 @@
+package {{ base_package }}.auth
+
+import {{ base_package }}.db.TestDatabase
+import zio.*
+
+/** Runs the UserStore contract against the real database (see TestDatabase). */
+object UserStoreSpec extends UserStoreContract {
+
+  override val bootstrap: TaskLayer[UserStore] = TestDatabase.dataSource >>> UserStore.live
+
+}

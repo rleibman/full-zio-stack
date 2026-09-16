@@ -35,6 +35,7 @@ expect_rejected "an invalid project slug" project_slug --data author_name=A --da
 expect_rejected "an invalid class prefix" class_prefix --data author_name=A --data class_prefix=lowercase
 expect_rejected "an unknown database" database --data author_name=A --data database=oracle
 expect_rejected "an unknown HTTP server" http_server --data author_name=A --data http_server=akka-http
+expect_rejected "authentication on http4s" auth --data author_name=A --data auth=zio-auth --data http_server=http4s
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures invalid answer(s) accepted"

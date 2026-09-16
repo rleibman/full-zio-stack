@@ -117,6 +117,37 @@ sqlite_file:
   default: "data/{{ project_slug }}.db"
   when: "{{ database == 'sqlite' }}"
 
+# ---- AI
+ai:
+  type: str
+  help: AI features (a "suggest a description" mutation, and the service behind it)
+  choices:
+    None: none
+    langchain4j: langchain4j
+  default: none
+ai_provider:
+  type: str
+  help: AI provider (change it later in application.conf)
+  choices: [anthropic, openai, ollama]
+  default: anthropic
+  when: "{{ ai == 'langchain4j' }}"
+ai_model:
+  type: str
+  help: Model id
+  default: "{{ {'anthropic': 'claude-sonnet-5', 'openai': 'gpt-4o-mini', 'ollama': 'llama3.2'}[ai_provider] }}"
+  when: "{{ ai == 'langchain4j' }}"
+
+# ---- authentication
+auth:
+  type: str
+  help: "Authentication (zio-auth: login, registration, password recovery and JWT sessions)"
+  choices:
+    None: none
+    zio-auth: zio-auth
+  default: none
+  # zio-auth builds zio.http.Routes, so it can only be mounted on the zio-http server.
+  validator: "{% if auth == 'zio-auth' and http_server != 'zio-http' %}zio-auth's routes are zio-http routes: choose zio-http as the HTTP server, or no authentication{% endif %}"
+
 # ---- ops
 dev_compose:
   type: bool
@@ -154,6 +185,9 @@ _tasks:
 
 _message_after_copy: |
   {{ project_name }} is ready in {{ _copier_conf.dst_path }}. Next:
+  {%- if auth == 'zio-auth' %}
+    export GITHUB_TOKEN=...   (zio-auth is on GitHub Packages, which needs a token with read:packages even to read)
+  {%- endif %}
   {%- if components == 'full-stack' %}
     cd stLib && npm install && sbt --error publishLocal && cd ..   (the client's facades; needs the local ScalablyTyped converter)
   {%- endif %}

@@ -1,0 +1,323 @@
+/*
+ * Copyright (c) 2024 Roberto Leibman
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+ * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+package net.leibman.fullziostack.auth
+
+import net.leibman.fullziostack.db.{DataIO, RepositoryErrors}
+import net.leibman.fullziostack.repository.RepositoryError
+import zio.*
+
+import java.security.SecureRandom
+import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
+import java.time.Instant
+import java.time.temporal.ChronoUnit
+import java.util.Base64
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.PBEKeySpec
+import javax.sql.DataSource
+
+/** Where users and their passwords live. Only in projects generated with authentication, where [[AuthModule]] hands it
+  * to zio-auth.
+  *
+  * Unlike the application's own entities, this is one plain-JDBC implementation rather than one per database layer: the
+  * few statements it needs are the same SQL on MariaDB, MySQL, PostgreSQL and SQLite, so authentication works the same
+  * way whichever layer the project was generated with. Your own entities belong in the repository (see
+  * `ModelObjectOperations`); follow this only if you extend the user itself.
+  *
+  * Password hashes never leave here: [[User]] doesn't have a field for one.
+  */
+trait UserStore {
+
+  def get(id: UserId): DataIO[Option[User]]
+
+  def byEmail(email: String): DataIO[Option[User]]
+
+  /** The user, if the password matches and the account is active and not deleted. */
+  def login(
+    email:    String,
+    password: String
+  ): DataIO[Option[User]]
+
+  /** Registers an inactive user. Fails with [[RepositoryError.Conflict]] if the email is taken. */
+  def create(
+    name:     String,
+    email:    String,
+    password: String
+  ): DataIO[User]
+
+  def activate(id: UserId): DataIO[Unit]
+
+  def setPassword(
+    id:       UserId,
+    password: String
+  ): DataIO[Unit]
+
+}
+
+object UserStore {
+
+  /** Over the application's database, sharing its connection pool. */
+  val live: URLayer[DataSource, UserStore] = ZLayer.fromFunction(JdbcUserStore(_))
+
+  /** In memory: for tests, or for running without a database. */
+  val mock: ULayer[UserStore] =
+    ZLayer(Ref.make(Map.empty[UserId, (User, String)]).map(MockUserStore(_)))
+
+  /** The current time at the precision the `created` column keeps, so a user read back equals the one just created. */
+  private[auth] val now: UIO[Instant] = Clock.instant.map(_.truncatedTo(ChronoUnit.MILLIS).nn)
+
+}
+
+/** Hashes passwords with PBKDF2, into `iterations:salt:hash` (both parts base64). Comparison is constant-time, so a
+  * caller can't learn a hash by timing its guesses.
+  */
+object PasswordHash {
+
+  private val iterations = 210000 // OWASP's 2023 recommendation for PBKDF2-HMAC-SHA256
+  private val keyLength = 256
+  private val saltLength = 16
+
+  def hash(password: String): String = {
+    val salt = new Array[Byte](saltLength)
+    SecureRandom().nextBytes(salt)
+    s"$iterations:${encode(salt)}:${encode(derive(password, salt, iterations))}"
+  }
+
+  /** True if `password` produced `stored`. False for anything unparseable, so a corrupt row can't let anyone in. */
+  def matches(
+    password: String,
+    stored:   String
+  ): Boolean =
+    stored.split(':') match {
+      case Array(iterationsPart, saltPart, hashPart) =>
+        iterationsPart.toIntOption.exists { rounds =>
+          val expected = decode(hashPart)
+          constantTimeEquals(derive(password, decode(saltPart), rounds), expected)
+        }
+      case _ => false
+    }
+
+  private def derive(
+    password:   String,
+    salt:       Array[Byte],
+    iterations: Int
+  ): Array[Byte] =
+    SecretKeyFactory
+      .getInstance("PBKDF2WithHmacSHA256").nn
+      .generateSecret(PBEKeySpec(password.toCharArray, salt, iterations, keyLength)).nn
+      .getEncoded.nn
+
+  private def constantTimeEquals(
+    a: Array[Byte],
+    b: Array[Byte]
+  ): Boolean = java.security.MessageDigest.isEqual(a, b)
+
+  private def encode(bytes: Array[Byte]): String = Base64.getEncoder.nn.encodeToString(bytes).nn
+
+  private def decode(text: String): Array[Byte] =
+    try Base64.getDecoder.nn.decode(text).nn
+    catch { case _: IllegalArgumentException => Array.empty[Byte] }
+
+}
+
+/** [[UserStore]] over JDBC. The SQL is deliberately dialect-free; `created` is epoch milliseconds because SQLite has no
+  * timestamp type (see the V2 migrations).
+  */
+private class JdbcUserStore(dataSource: DataSource) extends UserStore {
+
+  private val columns = "id, email, name, active, created, deleted"
+
+  override def get(id: UserId): DataIO[Option[User]] =
+    queryOne(s"select $columns from app_user where id = ?")(_.setInt(1, id.value))
+
+  override def byEmail(email: String): DataIO[Option[User]] =
+    queryOne(s"select $columns from app_user where email = ?")(_.setString(1, email))
+
+  override def login(
+    email:    String,
+    password: String
+  ): DataIO[Option[User]] =
+    withConnection { connection =>
+      // The hash is read here and nowhere else, so it never reaches a caller even on success.
+      val found = usingStatement(connection, s"select $columns, password_hash from app_user where email = ?") { statement =>
+        statement.setString(1, email)
+        usingResults(statement)(results => if (results.next()) Some((readUser(results), Option(results.getString("password_hash")))) else None)
+      }
+      found.collect {
+        case (user, Some(stored)) if user.active && !user.deleted && PasswordHash.matches(password, stored) => user
+      }
+    }
+
+  override def create(
+    name:     String,
+    email:    String,
+    password: String
+  ): DataIO[User] =
+    UserStore.now.flatMap { now =>
+      withConnection { connection =>
+        val id = usingStatement(connection, "insert into app_user (email, name, active, created, deleted, password_hash) values (?, ?, ?, ?, ?, ?)", generatedKeys = true) {
+          statement =>
+            statement.setString(1, email)
+            statement.setString(2, name)
+            statement.setBoolean(3, false)
+            statement.setLong(4, now.toEpochMilli)
+            statement.setBoolean(5, false)
+            statement.setString(6, PasswordHash.hash(password))
+            statement.executeUpdate()
+            usingResults(statement.getGeneratedKeys.nn)(results =>
+              if (results.next()) UserId(results.getInt(1)) else throw RepositoryError.Unexpected("The database returned no id for the new user")
+            )
+        }
+        User(id = id, email = email, name = name, active = false, created = now, deleted = false)
+      }
+    }
+
+  override def activate(id: UserId): DataIO[Unit] =
+    update("update app_user set active = ? where id = ?", s"No user with id ${id.value} to activate") { statement =>
+      statement.setBoolean(1, true)
+      statement.setInt(2, id.value)
+    }
+
+  override def setPassword(
+    id:       UserId,
+    password: String
+  ): DataIO[Unit] =
+    update("update app_user set password_hash = ? where id = ?", s"No user with id ${id.value} to set a password for") { statement =>
+      statement.setString(1, PasswordHash.hash(password))
+      statement.setInt(2, id.value)
+    }
+
+  private def readUser(results: ResultSet): User =
+    User(
+      id = UserId(results.getInt("id")),
+      email = results.getString("email").nn,
+      name = results.getString("name").nn,
+      active = results.getBoolean("active"),
+      created = Instant.ofEpochMilli(results.getLong("created")).nn,
+      deleted = results.getBoolean("deleted")
+    )
+
+  private def queryOne(sql: String)(bind: PreparedStatement => Unit): DataIO[Option[User]] =
+    withConnection { connection =>
+      usingStatement(connection, sql) { statement =>
+        bind(statement)
+        usingResults(statement)(results => if (results.next()) Some(readUser(results)) else None)
+      }
+    }
+
+  private def update(
+    sql:      String,
+    notFound: String
+  )(bind:     PreparedStatement => Unit
+  ): DataIO[Unit] =
+    withConnection { connection =>
+      val rows = usingStatement(connection, sql) { statement =>
+        bind(statement)
+        statement.executeUpdate()
+      }
+      if (rows == 0) throw RepositoryError.NotFound(notFound)
+    }
+
+  /** Runs `body` on a pooled connection, on a blocking thread, turning anything it throws into a [[RepositoryError]]. */
+  private def withConnection[A](body: Connection => A): DataIO[A] =
+    ZIO
+      .acquireReleaseWith(ZIO.attemptBlocking(dataSource.getConnection.nn))(connection => ZIO.attemptBlocking(connection.close()).orDie)(connection =>
+        ZIO.attemptBlocking(body(connection))
+      )
+      .mapError(RepositoryErrors.fromThrowable)
+
+  private def usingStatement[A](
+    connection:    Connection,
+    sql:           String,
+    generatedKeys: Boolean = false
+  )(body:          PreparedStatement => A
+  ): A = {
+    val statement =
+      if (generatedKeys) connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS).nn else connection.prepareStatement(sql).nn
+    try body(statement)
+    finally statement.close()
+  }
+
+  private def usingResults[A](statement: PreparedStatement)(body: ResultSet => A): A = usingResults(statement.executeQuery().nn)(body)
+
+  private def usingResults[A](results: ResultSet)(body: ResultSet => A): A =
+    try body(results)
+    finally results.close()
+
+}
+
+/** [[UserStore]] in memory. Ids count up from 1, as a database's would. */
+private class MockUserStore(users: Ref[Map[UserId, (User, String)]]) extends UserStore {
+
+  override def get(id: UserId): DataIO[Option[User]] = users.get.map(_.get(id).map(_._1))
+
+  override def byEmail(email: String): DataIO[Option[User]] = users.get.map(_.values.collectFirst { case (user, _) if user.email == email => user })
+
+  override def login(
+    email:    String,
+    password: String
+  ): DataIO[Option[User]] =
+    users.get.map(_.values.collectFirst {
+      case (user, stored) if user.email == email && user.active && !user.deleted && PasswordHash.matches(password, stored) => user
+    })
+
+  override def create(
+    name:     String,
+    email:    String,
+    password: String
+  ): DataIO[User] =
+    for {
+      now      <- UserStore.now
+      existing <- byEmail(email)
+      _        <- ZIO.fail(RepositoryError.Conflict(s"A user with the email $email already exists")).when(existing.isDefined)
+      user <- users.modify { current =>
+        val user = User(
+          id = UserId(current.keys.map(_.value).maxOption.getOrElse(0) + 1),
+          email = email,
+          name = name,
+          active = false,
+          created = now,
+          deleted = false
+        )
+        (user, current + (user.id -> (user, PasswordHash.hash(password))))
+      }
+    } yield user
+
+  override def activate(id: UserId): DataIO[Unit] = change(id, s"No user with id ${id.value} to activate") { case (user, hash) => (user.copy(active = true), hash) }
+
+  override def setPassword(
+    id:       UserId,
+    password: String
+  ): DataIO[Unit] = change(id, s"No user with id ${id.value} to set a password for") { case (user, _) => (user, PasswordHash.hash(password)) }
+
+  private def change(
+    id:       UserId,
+    notFound: String
+  )(f:        ((User, String)) => (User, String)
+  ): DataIO[Unit] =
+    users.modify { current =>
+      current.get(id) match {
+        case None       => (ZIO.fail(RepositoryError.NotFound(notFound)), current)
+        case Some(user) => (ZIO.unit, current + (id -> f(user)))
+      }
+    }.flatten
+
+}

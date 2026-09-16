@@ -45,6 +45,8 @@ object RepositoryErrors {
       case _: SQLRecoverableException                         => RepositoryError.Transient(message, Some(t))
       case e: SQLException if sqlStateClass(e).contains("08") => RepositoryError.Transient(message, Some(t))
       case e: SQLException if sqlStateClass(e).contains("23") => RepositoryError.Conflict(message, Some(t))
+      // SQLite leaves the SQL state unset and says so only in the message ("[SQLITE_CONSTRAINT_UNIQUE] ...").
+      case _: SQLException if message.contains("SQLITE_CONSTRAINT") => RepositoryError.Conflict(message, Some(t))
       case _ => RepositoryError.Unexpected(message, Some(t))
     }
   }

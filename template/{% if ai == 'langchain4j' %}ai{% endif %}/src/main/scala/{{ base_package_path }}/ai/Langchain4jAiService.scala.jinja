@@ -1,0 +1,21 @@
+package {{ base_package }}.ai
+
+import dev.langchain4j.model.chat.ChatModel
+import zio.*
+
+/** [[AiService]] over a langchain4j model. Calls block, so they run on ZIO's blocking pool. */
+final case class Langchain4jAiService(model: ChatModel) extends AiService {
+
+  override def suggestDescription(name: String): IO[AiError, String] =
+    chat(
+      s"""Write one sentence, at most 140 characters, describing an item called "$name".
+         |Answer with the sentence itself, nothing else.""".stripMargin
+    ).map(_.trim.nn)
+
+  private def chat(prompt: String): IO[AiError, String] =
+    ZIO
+      .attemptBlocking(model.chat(prompt).nn)
+      .tapErrorCause(cause => ZIO.logWarningCause("The AI provider failed", cause))
+      .mapError(e => AiError.Unavailable(Option(e.getMessage).getOrElse("The AI provider failed"), Some(e)))
+
+}

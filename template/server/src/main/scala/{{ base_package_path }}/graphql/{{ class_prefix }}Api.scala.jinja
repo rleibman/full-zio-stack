@@ -12,6 +12,8 @@ import {{ base_package }}.db.{DataIO, ZIORepository}
 import {{ base_package }}.model.*
 import {{ base_package }}.repository.RepositoryError
 import {{ base_package }}.server.BuildInfo
+import {{ base_package }}.telemetry.Telemetry
+import zio.telemetry.opentelemetry.tracing.Tracing
 import zio.*
 
 import scala.language.postfixOps
@@ -102,7 +104,7 @@ object {{ class_prefix }}Api {
   given Schema[ZIORepository, Queries] = ApiSchema.gen[ZIORepository, Queries]
   given Schema[ZIORepository, Mutations] = ApiSchema.gen[ZIORepository, Mutations]
 
-  lazy val api: GraphQL[ZIORepository] =
+  lazy val api: GraphQL[ZIORepository & Tracing] =
     graphQL(
       RootResolver(
         Queries(
@@ -120,7 +122,8 @@ object {{ class_prefix }}Api {
           deleteModelObject = args => withRepository(_.modelObjectOps.delete(args.id, args.softDelete))
         )
       )
-    ) @@ maxFields(200) // query analyzer that limit query fields
+    ) @@ Telemetry.graphqlSpans // a span per GraphQL operation (exported only when an OTLP endpoint is configured)
+      @@ maxFields(200) // query analyzer that limit query fields
       @@ maxDepth(30) // query analyzer that limit query depth
       @@ timeout(3 seconds) // wrapper that fails slow queries
       @@ printSlowQueries(500 millis) // wrapper that logs slow queries

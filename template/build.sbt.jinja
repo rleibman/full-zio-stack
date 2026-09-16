@@ -20,6 +20,18 @@ Global / onChangedBuildSource := ReloadOnSourceChanges
 ThisBuild / scalaVersion      := SCALA
 ThisBuild / version           := "0.1.0-SNAPSHOT"
 ThisBuild / organization      := "{{ organization }}"
+{%- if auth == 'zio-auth' %}
+
+// zio-auth is published to GitHub Packages, which needs a token with read:packages even to read: set GITHUB_TOKEN
+// (and GITHUB_ACTOR, if your user name is not the one below) before building.
+ThisBuild / resolvers += "GitHub Packages rleibman/zio-auth" at "https://maven.pkg.github.com/rleibman/zio-auth"
+ThisBuild / credentials += Credentials(
+  "GitHub Package Registry",
+  "maven.pkg.github.com",
+  sys.env.getOrElse("GITHUB_ACTOR", "rleibman"),
+  sys.env.getOrElse("GITHUB_TOKEN", ""),
+)
+{%- endif %}
 {%- if packaging != 'none' %}
 
 // sbt-native-packager wires up scopes that this build never reads.
@@ -138,6 +150,22 @@ lazy val db = project
       databaseLibraries("{{ database }}"),
   )
 
+{%- if ai == 'langchain4j' %}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// AI: the service and its GraphQL fragment (the provider is configuration: app.ai in application.conf)
+lazy val ai = project
+  .in(file("ai"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .dependsOn(modelJVM)
+  .settings(
+    name := "{{ project_slug }}-ai",
+    commonSettings,
+    testSettings,
+    libraryDependencies ++= Seq(zio, calibanCore) ++ langchain4j
+  )
+{%- endif %}
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Server ({{ http_server }}): config, GraphQL API, services, and Main
 lazy val server = project
@@ -154,7 +182,7 @@ lazy val server = project
     DebianPlugin,
 {%- endif %}
   )
-  .dependsOn(modelJVM, db % "compile->compile;test->test")
+  .dependsOn(modelJVM, db % "compile->compile;test->test"{% if ai == 'langchain4j' %}, ai{% endif %})
   .settings(
     name             := "{{ project_slug }}-server",
     buildInfoPackage := "{{ base_package }}.server",
@@ -162,7 +190,8 @@ lazy val server = project
     Compile / mainClass := Some("{{ base_package }}.server.Main"),
     commonSettings,
     testSettings,
-    libraryDependencies ++= Seq(zio, calibanCore) ++ zioConfig ++ logging ++ serverLibraries("{{ http_server }}"),
+    libraryDependencies ++= Seq(zio, calibanCore) ++ zioConfig ++ logging ++ telemetry ++ serverLibraries("{{ http_server }}")
+      {%- if auth == 'zio-auth' %} ++ zioAuth{% endif %},
     calibanRender := Def.uncached {
       Def.taskDyn {
         val schemaFile = baseDirectory.value / "src" / "main" / "graphql" / "schema.graphql"
@@ -261,7 +290,11 @@ lazy val client = project
     commonSettings,
     libraryDependencies ++= clientLibraries ++ scalaJavaTime ++ Seq(
       // Hand-suffixed: coursier cross-versions the local module *directory* to _sjs1_3 but not the jar name.
-      "{{ organization }}" % "{{ project_slug }}-stlib_sjs1_3" % stlibVersion
+      "{{ organization }}" % "{{ project_slug }}-stlib_sjs1_3" % stlibVersion,
+      {%- if auth == 'zio-auth' %}
+      // zio-auth's client half: the login, registration and password-recovery screens (see AuthGate).
+      zioAuthClient,
+      {%- endif %}
     ),
     dependencyOverrides ++= Seq(
       "com.github.japgolly.scalajs-react" %% "core"  % V.scalajsReact,
@@ -312,7 +345,7 @@ lazy val client = project
 //////////////////////////////////////////////////////////////////////////////////////////////////
 lazy val root = project
   .in(file("."))
-  .aggregate(modelJVM, {% if full_stack %}modelJS, {% endif %}db, server{% if full_stack %}, client{% endif %})
+  .aggregate(modelJVM, {% if full_stack %}modelJS, {% endif %}db, {% if ai == 'langchain4j' %}ai, {% endif %}server{% if full_stack %}, client{% endif %})
   .settings(
     name           := "{{ project_slug }}",
     publish / skip := true,

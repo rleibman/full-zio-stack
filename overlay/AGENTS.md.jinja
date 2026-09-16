@@ -12,6 +12,15 @@ Generated from the [full-zio-stack](https://github.com/rleibman/full-zio-stack) 
 - Scala 3, ZIO 2, sbt 2. Compiled with `-Werror` and `-Yexplicit-nulls` (see "Compiler rules").
 - **HTTP server:** {% if http_server == 'http4s' %}http4s (ember) through zio-interop-cats{% else %}zio-http{% endif %}.
 - **API:** Caliban GraphQL at `/api/graphql`, with GraphiQL at `/api/graphiql`. `/health` is the only REST endpoint.
+- **Tracing:** OpenTelemetry (zio-telemetry), exported over OTLP when `app.telemetry.endpoint` is set.
+{%- if auth == 'zio-auth' %}
+- **Authentication:** zio-auth — login, registration, password recovery and JWT sessions, over the users in
+  `UserStore`. It comes from GitHub Packages, so building needs `GITHUB_TOKEN` (`read:packages`).
+{%- endif %}
+{%- if ai == 'langchain4j' %}
+- **AI:** langchain4j behind an `AiService`, with a `suggestDescription` GraphQL mutation. The provider
+  ({{ ai_provider }} here) and model are configuration (`app.ai`), not a build choice.
+{%- endif %}
 - **Database:** {{ {'mariadb': 'MariaDB', 'mysql': 'MySQL', 'postgres': 'PostgreSQL', 'sqlite': 'SQLite'}[database] }},
   accessed with {{ {'quill': 'Quill (quill-jdbc-zio)', 'doobie': 'doobie (via zio-interop-cats)', 'slick': 'Slick'}[db_layer] }}.
   The schema is managed by Flyway migrations, run at startup.
@@ -26,7 +35,10 @@ Generated from the [full-zio-stack](https://github.com/rleibman/full-zio-stack) 
 |---|---|
 | `model/` | Domain types{% if components == 'full-stack' %}, shared by the server and the client (cross-built JVM + JS){% endif %}: `{{ base_package }}.model`. Also the repository contract in `{{ base_package }}.repository`: `CRUDOperations[F[_], ...]`, one `...Operations[F]` per entity, `Repository[F[_]]`, and `RepositoryError` |
 | `db/` | The server's repository: the {{ db_layer }} implementation of each `...Operations[DataIO]`, `ZIORepository.live`, the in-memory `MockRepository`, and the Flyway migrations in `db/src/main/resources/db/migration/{{ migration_dir }}/`: `{{ base_package }}.db` |
-| `server/` | Config, the GraphQL API and service layer, and `{{ base_package }}.server.Main` |
+| `server/` | Config, the GraphQL API and service layer, and `{{ base_package }}.server.Main`{% if auth == 'zio-auth' %}. `AuthModule` tells zio-auth where the users are, `AuthRoutes` mounts its routes{% endif %} |
+{%- if ai == 'langchain4j' %}
+| `ai/` | `AiService` (langchain4j) and its GraphQL fragment: `{{ base_package }}.ai` |
+{%- endif %}
 {%- if components == 'full-stack' %}
 | `client/` | Scala.js UI: `{{ base_package }}.client` |
 | `stLib/` | Standalone sbt build that generates the ScalablyTyped facades (React, MUI) into `{{ base_package }}.st` |
@@ -71,6 +83,23 @@ Always use `sbt --error …` to keep output short; drop `--error` only when you 
   codes back into the same `RepositoryError`s.{% endif %} Input validation lives in the API (`invalid(...)`).
 - **Layers:** `server/.../AppLayers.scala` wires config → `DataSources.live` (pooled, migrated by Flyway, closed on
   shutdown) → `ZIORepository.live`. `AppLayers.mock` uses `MockRepository.live` instead, for tests.
+- **Tracing:** OpenTelemetry through zio-telemetry. `Telemetry.live` builds a tracer from `app.telemetry`; with no
+  endpoint configured it records nothing, so tracing costs nothing in tests and development. `{{ class_prefix }}Api`
+  puts a span around each GraphQL operation; use `ZIO.serviceWithZIO[Tracing](_.span("name")(...))` for more.
+{%- if ai == 'langchain4j' %}
+- **AI:** `ai/src/main/scala/{{ pkg }}/ai/AiService.scala` is the service; `ChatModels` builds the configured
+  provider's model, and `AiApi` is the GraphQL fragment that `ApiDefinition` combines with the application's API.
+  With `app.ai.provider = none`, AI calls fail with a message saying so; tests use a stub model and never call a
+  provider. Add AI features to `AiService`, and their mutations to `AiApi`.
+{%- endif %}
+{%- if auth == 'zio-auth' %}
+- **Authentication:** `db/.../auth/UserStore.scala` holds the users and their password hashes (PBKDF2). It is plain
+  JDBC rather than {{ db_layer }}, because the same few statements then work on every database; your own entities
+  still belong in the repository. `server/.../AuthModule.scala` implements zio-auth's `AuthServer` over it, and
+  `AuthRoutes.secure` mounts the login routes and puts the application's behind `bearerSessionProvider`. A route that
+  must refuse anonymous callers asks for `Session[User, ConnectionId]` and matches on it; nothing does yet, so the
+  GraphQL API is still open. Registration emails are logged, not sent — see `sendEmail` in `AuthModule`.
+{%- endif %}
 - **Tests:** each entity's operations pass `CRUDOperationsContract` (against the mock and the real database); HTTP
   behaviour is in `ServerContractSpec` (real HTTP, random port). Both use ZIO Test's *live* Clock and Random.
 - **Schema changes only through new Flyway migrations** (`V<n>__description.sql` in

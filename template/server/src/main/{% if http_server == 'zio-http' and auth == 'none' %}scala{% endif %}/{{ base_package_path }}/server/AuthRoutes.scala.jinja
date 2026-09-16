@@ -1,0 +1,13 @@
+package {{ base_package }}.server
+
+import zio.*
+import zio.http.{Response, Routes}
+
+/** Where the login routes would be mounted, in a project generated without authentication: the application's routes go
+  * up unchanged. (See the zio-auth variant, which has the documentation.)
+  */
+object AuthRoutes {
+
+  def secure[R](routes: Routes[R, Response]): URIO[AuthModule.Env, Routes[R & AuthModule.Env, Response]] = ZIO.succeed(routes)
+
+}

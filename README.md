@@ -25,6 +25,8 @@ Copier asks a few questions; every one has a default, so Enter all the way throu
 | HTTP server | zio-http, http4s |
 | Database | MariaDB, MySQL, PostgreSQL, SQLite |
 | Database layer | Quill, doobie, Slick |
+| AI | none, langchain4j (Anthropic, OpenAI or Ollama, chosen by configuration) |
+| Authentication | none, zio-auth (needs zio-http and a GitHub Packages token) |
 | Packaging | Docker image, Debian package with a systemd service, none |
 | CI | GitHub Actions, none |
 | License | MIT, Apache-2.0, BSD-3-Clause, GPL-3.0, proprietary |
@@ -75,6 +77,16 @@ to "add a Customer entity" adds it through every layer, following the project's 
 #### Caliban
 #### zio-config
 #### zio-logging
+#### langchain4j
+Optional AI: a service and a GraphQL mutation that asks an LLM (Anthropic, OpenAI or Ollama) for a description. The
+provider is configuration, so it can change without regenerating.
+#### zio-auth
+Optional authentication: login, registration with an emailed confirmation, password recovery and JWT sessions, over a
+`UserStore` that keeps users and PBKDF2 password hashes. Its routes are zio-http routes, so it needs that server; it
+is published to GitHub Packages, so building a project that uses it needs a `GITHUB_TOKEN` with `read:packages`.
+#### zio-telemetry
+OpenTelemetry tracing for the server: a span per GraphQL operation, exported over OTLP when an endpoint is configured,
+and a no-op tracer otherwise.
 #### zio-test
 #### zio-json
 #### quill
@@ -124,13 +136,20 @@ generated projects, and `scripts/MakeTemplate.scala` builds `template/` (what Co
 | `model/` | Domain types shared by the server and the client (cross-built for the JVM and Scala.js), and the repository contract: `Repository[F[_]]`, one `...Operations[F]` per entity, and `RepositoryError`. The server implements it with ZIO, the client with `AsyncCallback` |
 | `db-core/` | `ZIORepository` (= `Repository[DataIO]`), the in-memory `MockRepository`, the pooled `DataSource` + Flyway, the migrations, and the contract test suites every database layer must pass |
 | `db-quill/`, `db-doobie/`, `db-slick/` | The three database layers. Each is built once per database as `db-<layer>-<database>` (mariadb, mysql, postgres, sqlite): shared code in `src/main/scala`, the database-specific bits (Quill context, doobie mappings, Slick profile) in `src/main-<database>/scala`. The server uses `db-quill-mariadb`; every variant passes the same contract tests |
-| `server-core/` | Configuration, the Caliban GraphQL API (resolved directly against the repository), and the layer wiring (`AppLayers`). Independent of the HTTP server |
+| `server-core/` | Configuration, the Caliban GraphQL API (resolved directly against the repository), and the layer wiring (`AppLayers`). Independent of the HTTP server. `src/main-ai-*` and `src/main-auth-*` hold the one file each of those choices changes; `server-core-ai` and `server-core-auth` are the projects that compile the non-default ones |
 | `server-ziohttp/`, `server-http4s/` | The two HTTP servers (zio-http, and http4s/ember through zio-interop-cats): GraphQL at `/api/graphql`, GraphiQL at `/api/graphiql`, `/health`, and the client's static files. Both pass the same contract tests |
 | `client/` | Scala.js + scalajs-react + Material UI, bundled with vite. Talks to the server with a GraphQL client generated from the server's schema |
 | `stLib/` | A standalone sbt build that generates the ScalablyTyped facades (React, MUI) |
 
 `ModelObject` is a sample entity wired through every layer: model, migration, data service, GraphQL, and a CRUD screen.
 To add your own entity, copy its pattern (every file involved has `ModelObject` in its name).
+
+### The zio-auth variants
+`auth=zio-auth` depends on [zio-auth](https://github.com/rleibman/zio-auth), which is published to GitHub Packages
+and not to Maven Central, so even reading it needs credentials: export `GITHUB_TOKEN` (a personal access token with
+`read:packages`) before building `server-core-auth`, `server-ziohttp-auth`, `client-auth`, or a generated project with
+authentication. CI builds them only when the `ZIO_AUTH_PACKAGES_TOKEN` secret is set, because a workflow's built-in
+token cannot read another repository's packages.
 
 ### Toolchain
 Scala 3.9, sbt 2.x (the launcher picks the version from `project/build.properties`), a JDK 17+, Node/npm (for the
@@ -167,6 +186,7 @@ The client's GraphQL code is generated from `server-core/src/main/graphql/schema
 ```bash
 sbt test       # incremental in sbt 2: reruns only the tests whose code changed
 sbt testFull   # everything
+sbt testAuth   # the zio-auth variants; needs GITHUB_TOKEN (see below)
 ```
 - `CRUDOperationsContract` defines what every entity's operations must do. It runs against the in-memory mock and, through
   Testcontainers, against a real database for each database layer (Docker required).

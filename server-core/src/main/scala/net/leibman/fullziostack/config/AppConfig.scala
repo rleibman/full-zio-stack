@@ -23,6 +23,7 @@ package net.leibman.fullziostack.config
 
 import com.typesafe.config.ConfigFactory
 import net.leibman.fullziostack.db.DatabaseConfig
+import net.leibman.fullziostack.telemetry.TelemetryConfig
 import zio.*
 import zio.config.magnolia.DeriveConfig
 import zio.config.typesafe.*
@@ -36,8 +37,13 @@ case class HttpConfig(
 )
 
 case class AppConfig(
-  http: HttpConfig,
-  db:   DatabaseConfig
+  http:      HttpConfig,
+  db:        DatabaseConfig,
+  telemetry: TelemetryConfig,
+  /** Only used by projects generated with AI; harmless otherwise. */
+  ai: AiConfig = AiConfig(),
+  /** Only used by projects generated with authentication; harmless otherwise. */
+  auth: AuthSettings = AuthSettings()
 )
 
 object AppConfig {
@@ -52,5 +58,11 @@ object AppConfig {
   )
 
   val database: URLayer[AppConfig, DatabaseConfig] = ZLayer.fromFunction((config: AppConfig) => config.db)
+
+  val telemetry: URLayer[AppConfig, TelemetryConfig] = ZLayer.fromFunction((config: AppConfig) => config.telemetry)
+
+  val ai: URLayer[AppConfig, AiConfig] = ZLayer.fromFunction((config: AppConfig) => config.ai)
+
+  val auth: URLayer[AppConfig, AuthSettings] = ZLayer.fromFunction((config: AppConfig) => config.auth)
 
 }

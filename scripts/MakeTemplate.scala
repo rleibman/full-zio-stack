@@ -24,16 +24,32 @@ object MakeTemplate {
   /** Flyway migration directories, and the databases that use each. */
   val migrationDirs = Map("mysql" -> Seq("mariadb", "mysql"), "postgres" -> Seq("postgres"), "sqlite" -> Seq("sqlite"))
 
-  /** Where a repository file goes in the template: `target` replaces the matched `source` prefix; None skips it. A
-    * condition goes in the first path segment of the target, which then renders empty (so Copier skips the file) when
-    * the condition is false.
+  /** Where a repository file goes in the template: `target` replaces the matched `source` prefix; None skips it.
+    *
+    * A condition wraps one segment of the target, which then renders empty — and Copier skips a path with an empty
+    * segment, along with everything under it. Put the condition on the *deepest* segment the rule owns, so
+    * `template/` reads as the project it generates: `db/…/migration/{% if database == 'sqlite' %}sqlite{% endif %}/`
+    * says what it means, where a conditional top-level `db` would not. Keep it above any segment that only exists in
+    * this variant, though: conditioning `client/src/main/scala` alone would leave a server-only project an empty
+    * `client/src/main/`.
     */
   final case class Rule(
     source: String,
     target: Option[String],
   )
 
-  private def when(condition: String, directory: String): String = s"{% if $condition %}$directory{% endif %}"
+  private def when(condition: String, segment: String): String = s"{% if $condition %}$segment{% endif %}"
+
+  /** Only in projects generated with authentication (and, optionally, only when `also` holds). */
+  private def authOnly(
+    segment: String,
+    also:    String = ""
+  ): String = when(s"auth != 'none'${if (also.isEmpty) "" else s" and $also"}", segment)
+
+  /** The test for the database(s) a migration directory serves. */
+  private def databaseIs(databases: Seq[String]): String =
+    if (databases.sizeIs == 1) s"database == '${databases.head}'"
+    else s"database in [${databases.map(database => s"'$database'").mkString(", ")}]"
 
   private def skip(source: String): Rule = Rule(source, None)
 
@@ -64,29 +80,86 @@ object MakeTemplate {
       skip("project/plugins.sbt"),
       skip("server-core/src/main/resources/application.conf"),
       skip("stLib/build.sbt"),
-      // Model
+      // Model: the user is only part of projects with authentication.
+      map(
+        "model/shared/src/main/scala/net/leibman/fullziostack/auth/",
+        "model/shared/src/main/scala/net/leibman/fullziostack/" + authOnly("auth") + "/",
+      ),
       map("model/", "model/"),
     ) ++
-      // DB: db-core, plus the chosen database's migrations and test fixture...
+      // DB: the users table and the store behind it (authentication only), which have to come before the rules that
+      // take the rest of db-core...
+      migrationDirs.toSeq.map { (directory, users) =>
+        map(
+          s"db-core/src/main/resources/db/migration/$directory/V2__app_user.sql",
+          "db/src/main/resources/db/migration/" + when(databaseIs(users), directory) + "/" + authOnly("V2__app_user.sql"),
+        )
+      } ++
+      Seq(
+        map(
+          "db-core/src/main/scala/net/leibman/fullziostack/auth/",
+          "db/src/main/scala/net/leibman/fullziostack/" + authOnly("auth") + "/",
+        ),
+        map(
+          "db-core/src/test/scala/net/leibman/fullziostack/auth/",
+          "db/src/test/scala/net/leibman/fullziostack/" + authOnly("auth") + "/",
+        ),
+      ) ++
+      layers.map(layer =>
+        map(
+          s"db-$layer/src/test/scala/net/leibman/fullziostack/auth/",
+          "db/src/test/scala/net/leibman/fullziostack/" + authOnly("auth", s"db_layer == '$layer'") + "/",
+        )
+      ) ++
+      // ...then db-core itself, plus the chosen database's migrations and test fixture...
       migrationDirs.toSeq.map { (directory, users) =>
         map(
           s"db-core/src/main/resources/db/migration/$directory/",
-          when(s"database in [${users.map(d => s"'$d'").mkString(", ")}]", "db") + s"/src/main/resources/db/migration/$directory/",
+          "db/src/main/resources/db/migration/" + when(databaseIs(users), directory) + "/",
         )
       } ++
-      databases.map(database => map(s"db-core/src/test-$database/scala/", when(s"database == '$database'", "db") + "/src/test/scala/")) ++
+      databases.map(database => map(s"db-core/src/test-$database/scala/", "db/src/test/" + when(s"database == '$database'", "scala") + "/")) ++
       Seq(map("db-core/", "db/")) ++
       // ...plus the chosen layer, with its database-specific files.
       (for {
         layer    <- layers
         database <- databases
-      } yield map(s"db-$layer/src/main-$database/scala/", when(s"db_layer == '$layer' and database == '$database'", "db") + "/src/main/scala/")) ++
+      } yield map(
+        s"db-$layer/src/main-$database/scala/",
+        "db/src/main/" + when(s"db_layer == '$layer' and database == '$database'", "scala") + "/",
+      )) ++
       layers.map(layer => map(s"db-$layer/", when(s"db_layer == '$layer'", "db") + "/")) ++
-      // Server: server-core plus the chosen HTTP server.
-      Seq(map("server-core/", "server/")) ++
+      // Server: server-core (whose API definition and committed schema depend on the AI choice, and whose AuthModule
+      // depends on the authentication one) plus the chosen HTTP server, plus the AI module when there is one.
+      Seq(
+        map("server-core/src/main/graphql/", "server/src/main/" + when("ai == 'none'", "graphql") + "/"),
+        map("server-core/src/main-ai-none/scala/", "server/src/main/" + when("ai == 'none'", "scala") + "/"),
+        map("server-core/src/main-ai-langchain4j/graphql/", "server/src/main/" + when("ai == 'langchain4j'", "graphql") + "/"),
+        map("server-core/src/main-ai-langchain4j/scala/", "server/src/main/" + when("ai == 'langchain4j'", "scala") + "/"),
+        map("server-core/src/main-auth-none/scala/", "server/src/main/" + when("auth == 'none'", "scala") + "/"),
+        map("server-core/src/main-auth-zio-auth/scala/", "server/src/main/" + authOnly("scala") + "/"),
+        map("ai-langchain4j/", when("ai == 'langchain4j'", "ai") + "/"),
+        map("server-core/", "server/"),
+      ) ++
+      // The HTTP servers, whose zio-http one mounts the login routes. (Authentication forces http_server=zio-http,
+      // so the http4s module has no auth variant to choose between.)
+      Seq(
+        map("server-ziohttp/src/main-auth-none/scala/", "server/src/main/" + when("http_server == 'zio-http' and auth == 'none'", "scala") + "/"),
+        map("server-ziohttp/src/main-auth-zio-auth/scala/", "server/src/main/" + authOnly("scala") + "/"),
+        map("server-ziohttp/src/test-auth-zio-auth/scala/", "server/src/test/" + authOnly("scala") + "/"),
+      ) ++
       servers.map((server, directory) => map(s"$directory/", when(s"http_server == '$server'", "server") + "/")) ++
       Seq(
-        // Client
+        // Client. The module itself is conditional, so these keep that condition as well as their own: without it a
+        // server-only project would be left an empty client/src/main/.
+        map(
+          "client/src/main-auth-none/scala/",
+          when("components == 'full-stack'", "client") + "/src/main/" + when("auth == 'none'", "scala") + "/",
+        ),
+        map(
+          "client/src/main-auth-zio-auth/scala/",
+          when("components == 'full-stack'", "client") + "/src/main/" + authOnly("scala") + "/",
+        ),
         map("client/", when("components == 'full-stack'", "client") + "/"),
         map("stLib/", when("components == 'full-stack'", "stLib") + "/"),
         // Build
@@ -107,6 +180,11 @@ object MakeTemplate {
 
   /** Nothing personal may survive into generated sources. */
   val forbidden: Seq[String] = Seq("leibman", "roberto")
+
+  /** Except where a forbidden word is part of a third-party library's own coordinates: zio-auth is published under
+    * the same organization as this template, and a generated project really does depend on it by that name.
+    */
+  val allowed: Seq[String] = Seq("net.leibman\" % \"zio-auth", "maven.pkg.github.com/rleibman/zio-auth", "rleibman/zio-auth")
 
   /** sbt-header's license header. Generated projects get their own on first compile (AutomateHeaderPlugin). */
   val licenseHeader = """(?s)\A/\*\n \* Copyright \(c\) \d{4} Roberto Leibman\n.*? \*/\n\n""".r
@@ -181,7 +259,8 @@ object MakeTemplate {
       case Some(original) =>
         val text = if (source.toString.endsWith(".scala")) licenseHeader.replaceFirstIn(original, "") else original
         val replaced = replaceSentinels(text)
-        val leaks = forbidden.filter(word => replaced.toLowerCase.contains(word))
+        val remaining = allowed.foldLeft(replaced)((text, exception) => text.replace(exception, ""))
+        val leaks = forbidden.filter(word => remaining.toLowerCase.contains(word))
         if (leaks.nonEmpty) Some(s"$source still contains ${leaks.mkString(", ")} after replacement")
         else if (replaced != text && Seq("{{", "{%", "{#").exists(original.contains))
           Some(s"$source needs rendering, but already contains Jinja delimiters")

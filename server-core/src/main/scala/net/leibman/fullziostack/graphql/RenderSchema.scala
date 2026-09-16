@@ -31,7 +31,7 @@ object RenderSchema {
       case file :: Nil =>
         val path = Path.of(file).nn
         Files.createDirectories(path.getParent)
-        Files.writeString(path, FullZIOStackApi.api.render)
+        Files.writeString(path, ApiDefinition.api.render)
         println(s"Wrote $path")
       case _ => sys.error("Usage: RenderSchema <schema file>")
     }

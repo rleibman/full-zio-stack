@@ -33,6 +33,41 @@ jobs:
       - name: Every variant's tests (contract suites against real databases, both HTTP servers)
         run: sbt --error testServerSide
 
+  authentication:
+    name: Authentication (zio-auth)
+    runs-on: ubuntu-latest
+    # zio-auth lives in GitHub Packages, and a workflow's built-in token can only read packages of its own
+    # repository, so these steps need a personal access token with read:packages. Without that secret -- in a fork,
+    # say -- the rest of CI still covers everything except the auth variant.
+    env:
+      GITHUB_TOKEN: ${{ secrets.ZIO_AUTH_PACKAGES_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: token
+        run: echo "present=${{ secrets.ZIO_AUTH_PACKAGES_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+      - if: steps.token.outputs.present != 'true'
+        run: echo "::notice::ZIO_AUTH_PACKAGES_TOKEN is not set, so the zio-auth variant is not built."
+      - uses: actions/setup-java@v4
+        if: steps.token.outputs.present == 'true'
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+        if: steps.token.outputs.present == 'true'
+      - uses: actions/setup-python@v5
+        if: steps.token.outputs.present == 'true'
+        with:
+          python-version: "3.13"
+      - if: steps.token.outputs.present == 'true'
+        run: pip install copier pyyaml
+      - name: The auth variants of this repository's modules
+        if: steps.token.outputs.present == 'true'
+        run: sbt --error testAuth
+      - name: A generated project with authentication
+        if: steps.token.outputs.present == 'true'
+        run: tests/generate-and-build.sh "$RUNNER_TEMP/project" --data project_name="CI Project" --data components=server-only --data database=sqlite --data auth=zio-auth --data packaging=none
+
   validators:
     name: Invalid answers are rejected
     runs-on: ubuntu-latest
@@ -72,6 +107,7 @@ jobs:
           - { name: "docker-apache", data: "--data components=server-only --data database=sqlite --data packaging=docker --data license=Apache-2.0" }
           - { name: "systemd-gpl", data: "--data components=server-only --data http_server=http4s --data database=postgres --data packaging=systemd --data license=GPL-3.0 --data ci=none" }
           - { name: "full-stack-server-side", data: "--data components=full-stack --data license=Proprietary" }
+          - { name: "ai-langchain4j", data: "--data components=server-only --data database=sqlite --data ai=langchain4j --data packaging=none" }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

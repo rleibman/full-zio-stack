@@ -1,0 +1,12 @@
+package {{ base_package }}.client
+
+import japgolly.scalajs.react.vdom.VdomElement
+
+/** What the client shows before letting you in: nothing, in a project generated without authentication — the
+  * application renders straight away. (See the zio-auth variant, which has the documentation.)
+  */
+object AuthGate {
+
+  def apply(app: => VdomElement): VdomElement = app
+
+}

@@ -41,6 +41,20 @@ updates), `migration_dir` (`mysql` for MariaDB and MySQL, otherwise the database
 | `db_port` | integer | 3306, or 5432 for Postgres | host port of the development database; change it if that port is taken locally. Not asked when `database=sqlite` |
 | `sqlite_file` | path | `data/<project_slug>.db` | only when `database=sqlite` |
 
+## AI
+
+| Key | Values | Default | Phrases |
+|---|---|---|---|
+| `ai` | `none`, `langchain4j` | `none` | "with AI", "LLM", "suggest ... with AI" → `langchain4j` |
+| `ai_provider` | `anthropic`, `openai`, `ollama` | `anthropic` | "Claude" → `anthropic`; "GPT"/"OpenAI" → `openai`; "local"/"Ollama" → `ollama`. Only when `ai=langchain4j`; it's configuration, so it can be changed later without regenerating |
+| `ai_model` | model id | per provider | only when `ai=langchain4j` |
+
+## Authentication
+
+| Key | Values | Default | Phrases |
+|---|---|---|---|
+| `auth` | `none`, `zio-auth` | `none` | "with login", "users", "sign up", "authentication" → `zio-auth`. Two things to say when choosing it: it forces `http_server=zio-http` (the login routes are zio-http routes, and copier rejects the combination with http4s), and building the project needs `GITHUB_TOKEN` set to a token with `read:packages`, because zio-auth is published to GitHub Packages rather than Maven Central |
+
 ## Ops
 
 | Key | Values | Default | Phrases |
