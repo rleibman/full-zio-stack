@@ -45,6 +45,7 @@ Read `references/answers.md` for every question, its allowed values, its default
 | `components=full-stack` | `node --version`, `npm --version` | stop, or offer `server-only` |
 | `components=full-stack` | `ls ~/.ivy2/local/org.scalablytyped.converter/sbt-converter_sbt2_3/` shows the version pinned in the generated `stLib/project/plugins.sbt` | the ScalablyTyped converter isn't available on this machine yet (it's a locally published fork); offer `server-only` |
 | `dev_compose=true` | `docker compose version` | set `dev_compose=false` and tell the user they need their own database |
+| `auth=zio-auth` | `[ -n "$GITHUB_TOKEN" ]` | zio-auth is on GitHub Packages, so nothing will resolve without it: ask the user to export a token with `read:packages`, or offer `auth=none`. Also note `auth=zio-auth` forces `http_server=zio-http` (copier rejects it with http4s) |
 
 ## 4. Generate
 
