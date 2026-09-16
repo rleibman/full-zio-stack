@@ -1,0 +1,17 @@
+package {{ base_package }}.graphql
+
+import caliban.GraphQL
+import {{ base_package }}.ai.{AiApi, AiService}
+import {{ base_package }}.config.AppConfig
+import zio.*
+
+/** What AI adds to the API: the AI mutations, and the service behind them. */
+object AiModule {
+
+  type Env = AiService
+
+  def apis: List[GraphQL[Env]] = List(AiApi.api)
+
+  val layers: RLayer[AppConfig, Env] = AppConfig.ai >>> AiService.live
+
+}

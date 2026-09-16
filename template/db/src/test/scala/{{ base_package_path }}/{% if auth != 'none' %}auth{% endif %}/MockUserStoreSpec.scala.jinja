@@ -1,0 +1,10 @@
+package {{ base_package }}.auth
+
+import zio.*
+
+/** The in-memory store must behave like the database ones: the server tests rely on it. */
+object MockUserStoreSpec extends UserStoreContract {
+
+  override val bootstrap: ULayer[UserStore] = UserStore.mock
+
+}

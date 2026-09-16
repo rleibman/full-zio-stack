@@ -1,0 +1,112 @@
+package {{ base_package }}.auth
+
+import {{ base_package }}.repository.RepositoryError
+import zio.*
+import zio.test.*
+import zio.test.Assertion.*
+
+/** What [[UserStore]] must do, in memory and on every database. The JDBC implementation is shared by all of them, so
+  * these tests are really about the SQL being portable — and about never letting a wrong password through.
+  *
+  * Every test registers users under a fresh random email, so tests don't see each other's rows and the database doesn't
+  * have to be empty. That needs the live Random (ZIO Test's is deterministic) and the live Clock.
+  */
+abstract class UserStoreContract extends ZIOSpec[UserStore] {
+
+  private val password = "correct horse battery staple"
+
+  private def register(active: Boolean = true): ZIO[UserStore, RepositoryError, User] =
+    for {
+      suffix <- Random.nextIntBounded(Int.MaxValue)
+      store  <- ZIO.service[UserStore]
+      user   <- store.create(s"User $suffix", s"user-$suffix@example.com", password)
+      _      <- store.activate(user.id).when(active)
+    } yield user
+
+  override def spec: Spec[UserStore, Any] =
+    suite("UserStore")(
+      test("registers a user, inactive, and finds it again by id and by email") {
+        for {
+          store <- ZIO.service[UserStore]
+          user  <- register(active = false)
+          byId    <- store.get(user.id)
+          byEmail <- store.byEmail(user.email)
+        } yield assertTrue(
+          !user.active,
+          user.id != UserId.empty,
+          byId.contains(user),
+          byEmail.contains(user)
+        )
+      },
+      test("has no user for an unknown id or email") {
+        for {
+          store   <- ZIO.service[UserStore]
+          byId    <- store.get(UserId(Int.MaxValue))
+          byEmail <- store.byEmail("nobody@example.com")
+        } yield assertTrue(byId.isEmpty, byEmail.isEmpty)
+      },
+      test("refuses a second user with the same email") {
+        for {
+          store <- ZIO.service[UserStore]
+          user  <- register()
+          again <- store.create("Impostor", user.email, password).exit
+        } yield assert(again)(fails(isSubtype[RepositoryError.Conflict](anything)))
+      },
+      test("logs an active user in with the right password") {
+        for {
+          store  <- ZIO.service[UserStore]
+          user   <- register()
+          loggedIn <- store.login(user.email, password)
+        } yield assertTrue(loggedIn.map(_.id).contains(user.id), loggedIn.exists(_.active))
+      },
+      test("refuses the wrong password, an unknown email, and an inactive user") {
+        for {
+          store    <- ZIO.service[UserStore]
+          user     <- register()
+          inactive <- register(active = false)
+          wrong    <- store.login(user.email, "not the password")
+          unknown  <- store.login("nobody@example.com", password)
+          notYet   <- store.login(inactive.email, password)
+        } yield assertTrue(wrong.isEmpty, unknown.isEmpty, notYet.isEmpty)
+      },
+      test("activating lets a user log in") {
+        for {
+          store  <- ZIO.service[UserStore]
+          user   <- register(active = false)
+          before <- store.login(user.email, password)
+          _      <- store.activate(user.id)
+          after  <- store.login(user.email, password)
+        } yield assertTrue(before.isEmpty, after.map(_.id).contains(user.id))
+      },
+      test("changing the password invalidates the old one") {
+        for {
+          store <- ZIO.service[UserStore]
+          user  <- register()
+          _     <- store.setPassword(user.id, "a whole new password")
+          old   <- store.login(user.email, password)
+          fresh <- store.login(user.email, "a whole new password")
+        } yield assertTrue(old.isEmpty, fresh.map(_.id).contains(user.id))
+      },
+      test("reports a missing user when activating or setting a password") {
+        for {
+          store       <- ZIO.service[UserStore]
+          activate    <- store.activate(UserId(Int.MaxValue)).exit
+          setPassword <- store.setPassword(UserId(Int.MaxValue), password).exit
+        } yield assert(activate)(fails(isSubtype[RepositoryError.NotFound](anything))) &&
+          assert(setPassword)(fails(isSubtype[RepositoryError.NotFound](anything)))
+      },
+      test("stores the password hashed, never in the clear") {
+        val hash = PasswordHash.hash(password)
+        assertTrue(
+          !hash.contains(password),
+          PasswordHash.matches(password, hash),
+          !PasswordHash.matches("something else", hash),
+          // Two hashes of the same password differ: each gets its own salt.
+          hash != PasswordHash.hash(password),
+          // Nothing unparseable is ever a match.
+          !PasswordHash.matches(password, "not a hash")
+        )
+      }
+    ) @@ TestAspect.withLiveClock @@ TestAspect.withLiveRandom @@ TestAspect.sequential
+
+}

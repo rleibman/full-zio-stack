@@ -1,0 +1,47 @@
+package {{ base_package }}.config
+
+import com.typesafe.config.ConfigFactory
+import {{ base_package }}.db.DatabaseConfig
+import {{ base_package }}.telemetry.TelemetryConfig
+import zio.*
+import zio.config.magnolia.DeriveConfig
+import zio.config.typesafe.*
+
+case class HttpConfig(
+  host: String,
+  port: Int,
+  /** Directory the built client is served from, relative to the working directory: `dist` (production build) or `debugDist` (development build).
+    */
+  staticContentDir: String
+)
+
+case class AppConfig(
+  http:      HttpConfig,
+  db:        DatabaseConfig,
+  telemetry: TelemetryConfig,
+  /** Only used by projects generated with AI; harmless otherwise. */
+  ai: AiConfig = AiConfig(),
+  /** Only used by projects generated with authentication; harmless otherwise. */
+  auth: AuthSettings = AuthSettings()
+)
+
+object AppConfig {
+
+  /** Reads the `app` section of application.conf. Override the file with `-Dconfig.file=...`, or single values with the environment variables named
+    * in application.conf.
+    */
+  val live: TaskLayer[AppConfig] = ZLayer.fromZIO(
+    ZIO
+      .attempt(ConfigFactory.load().nn.getConfig("app").nn)
+      .flatMap(config => TypesafeConfigProvider.fromTypesafeConfig(config).load(DeriveConfig.derived[AppConfig].desc))
+  )
+
+  val database: URLayer[AppConfig, DatabaseConfig] = ZLayer.fromFunction((config: AppConfig) => config.db)
+
+  val telemetry: URLayer[AppConfig, TelemetryConfig] = ZLayer.fromFunction((config: AppConfig) => config.telemetry)
+
+  val ai: URLayer[AppConfig, AiConfig] = ZLayer.fromFunction((config: AppConfig) => config.ai)
+
+  val auth: URLayer[AppConfig, AuthSettings] = ZLayer.fromFunction((config: AppConfig) => config.auth)
+
+}

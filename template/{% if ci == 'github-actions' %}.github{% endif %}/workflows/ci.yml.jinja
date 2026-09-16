@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+{%- if components == 'full-stack' %}
+      # The client needs the ScalablyTyped facades from stLib/, which are built with a locally published converter that
+      # CI doesn't have, so CI tests everything but the client.
+      - run: sbt --error "db/testFull" "server/testFull"
+{%- else %}
+      - run: sbt --error testFull
+{%- endif %}

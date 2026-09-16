@@ -4,22 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "dependencies": {
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "semantic-ui-react": "^2.1.5",
-    "csstype": "^3.2.3"
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@fontsource/roboto": "^5.2.0",
+    "@mui/material": "^9.1.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "vite": "^8.3.0"
-  },
-  "overrides": {
-    "semantic-ui-react": {
-      "react": "$react",
-      "react-dom": "$react-dom"
-    },
-    "@fluentui/react-component-ref": {
-      "react": "$react",
-      "react-dom": "$react-dom"
-    }
   }
 }

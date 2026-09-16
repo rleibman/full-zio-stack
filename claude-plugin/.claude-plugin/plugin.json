@@ -1,0 +1,10 @@
+{
+  "name": "full-zio-stack",
+  "description": "Create and update Scala 3 + ZIO 2 + Caliban + Scala.js/React/MUI applications from the full-zio-stack Copier template, then verify they build and run.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Roberto Leibman"
+  },
+  "homepage": "https://github.com/rleibman/full-zio-stack",
+  "license": "MIT"
+}

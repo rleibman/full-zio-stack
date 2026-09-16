@@ -1,0 +1,27 @@
+package {{ base_package }}.db
+
+import doobie.Transactor
+import zio.*
+import zio.interop.catz.*
+
+import javax.sql.DataSource
+
+/** The repository, implemented with doobie. Every DB layer has an object with this name and signature, so the rest of the app doesn't depend on which
+  * one is used. Add each new entity's operations here.
+  */
+object ZIORepository {
+
+  val live: URLayer[DataSource, ZIORepository] = ZLayer.fromZIO(
+    for {
+      dataSource <- ZIO.service[DataSource]
+      // JDBC blocks, so doobie gets ZIO's blocking executor for its connections.
+      blocking <- ZIO.blockingExecutor
+    } yield {
+      val transactor = Transactor.fromDataSource[Task](dataSource, blocking.asExecutionContext)
+      new ZIORepository {
+        override val modelObjectOps: DoobieModelObjectOperations = DoobieModelObjectOperations(transactor)
+      }
+    }
+  )
+
+}

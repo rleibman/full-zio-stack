@@ -1,0 +1,35 @@
+package {{ base_package }}.ai
+
+import dev.langchain4j.model.anthropic.AnthropicChatModel
+import dev.langchain4j.model.chat.ChatModel
+import dev.langchain4j.model.ollama.OllamaChatModel
+import dev.langchain4j.model.openai.OpenAiChatModel
+import {{ base_package }}.config.AiConfig
+
+import java.time.Duration
+
+/** Builds the langchain4j model for the configured provider. Add a provider here and to its dependency in build.sbt. */
+object ChatModels {
+
+  def create(config: AiConfig): Option[ChatModel] = {
+    val timeout = Duration.ofSeconds(config.timeoutSeconds.toLong).nn
+    config.provider.toLowerCase match {
+      case "anthropic" =>
+        val builder = AnthropicChatModel.builder().nn.modelName(config.model).nn.timeout(timeout).nn
+        config.apiKey.foreach(builder.apiKey)
+        config.baseUrl.foreach(builder.baseUrl)
+        Some(builder.build().nn)
+      case "openai" =>
+        val builder = OpenAiChatModel.builder().nn.modelName(config.model).nn.timeout(timeout).nn
+        config.apiKey.foreach(builder.apiKey)
+        config.baseUrl.foreach(builder.baseUrl)
+        Some(builder.build().nn)
+      case "ollama" =>
+        val builder = OllamaChatModel.builder().nn.modelName(config.model).nn.timeout(timeout).nn
+        builder.baseUrl(config.baseUrl.getOrElse("http://localhost:11434"))
+        Some(builder.build().nn)
+      case _ => None
+    }
+  }
+
+}

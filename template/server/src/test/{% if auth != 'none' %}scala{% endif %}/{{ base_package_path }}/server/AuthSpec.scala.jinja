@@ -1,0 +1,150 @@
+package {{ base_package }}.server
+
+import auth.AuthServer
+import {{ base_package }}.auth.{ConnectionId, User, UserId}
+import {{ base_package }}.config.{AppConfig, AuthSettings, HttpConfig}
+import {{ base_package }}.db.DatabaseConfig
+import {{ base_package }}.telemetry.TelemetryConfig
+import zio.*
+import zio.test.*
+
+import java.net.URI
+import java.net.http.{HttpClient, HttpRequest, HttpResponse}
+import java.nio.file.{Files, Path}
+import scala.jdk.OptionConverters.*
+
+/** The login workflow zio-auth adds, over real HTTP. Only in projects generated with authentication.
+  *
+  * The users are the in-memory ones (see AppLayers.mock); UserStoreContract is what proves the same thing against a
+  * real database.
+  */
+object AuthSpec extends ZIOSpecDefault {
+
+  private val password = "a good enough password"
+
+  private case class Response(
+    status: Int,
+    body:   String,
+    token:  Option[String]
+  )
+
+  private case class Server(
+    port:   Int,
+    client: HttpClient
+  ) {
+
+    private def send(request: HttpRequest.Builder): Task[Response] =
+      ZIO
+        .fromCompletableFuture(client.sendAsync(request.build(), HttpResponse.BodyHandlers.ofString()).nn)
+        .map(response =>
+          Response(
+            status = response.statusCode(),
+            body = response.body().nn,
+            token = response.headers().nn.firstValue("Authorization").nn.toScala.map(_.stripPrefix("Bearer "))
+          )
+        )
+
+    private def url(path: String): URI = URI.create(s"http://127.0.0.1:$port$path").nn
+
+    def get(
+      path:  String,
+      token: Option[String] = None
+    ): Task[Response] =
+      send(token.foldLeft(HttpRequest.newBuilder(url(path)).nn.GET().nn)((request, t) => request.header("Authorization", s"Bearer $t")))
+
+    def post(
+      path: String,
+      body: String
+    ): Task[Response] =
+      send(
+        HttpRequest.newBuilder(url(path)).nn.header("Content-Type", "application/json").nn.POST(HttpRequest.BodyPublishers.ofString(body)).nn
+      )
+
+  }
+
+  /** An active user, registered the way the application itself would. */
+  private def register(email: String): ZIO[AuthServer[User, UserId, ConnectionId], Throwable, User] =
+    for {
+      server <- ZIO.service[AuthServer[User, UserId, ConnectionId]]
+      user   <- server.createUser("Test User", email, password)
+      _      <- server.activateUser(user.id)
+    } yield user
+
+  /** A directory to serve static files from: empty, since these tests are about the API, not the client. */
+  private val staticDirectory: ZLayer[Any, Throwable, Path] = ZLayer.scoped {
+    ZIO.acquireRelease(ZIO.attemptBlocking {
+      val directory: Path = Files.createTempDirectory("auth-spec").nn
+      directory
+    })(directory => ZIO.attemptBlocking(Files.deleteIfExists(directory)).orDie)
+  }
+
+  private val server: ZLayer[Any, Throwable, Server & AuthServer[User, UserId, ConnectionId]] =
+    staticDirectory.flatMap { static =>
+      val config = AppConfig(
+        http = HttpConfig(host = "127.0.0.1", port = 0, staticContentDir = static.get.toString),
+        db = DatabaseConfig(url = "unused", migrationsLocation = "unused"),
+        telemetry = TelemetryConfig(serviceName = "auth-spec"),
+        auth = AuthSettings(secret = "a secret for the tests", secureCookie = false)
+      )
+      AppLayers.mock(config) >>> (
+        ZLayer.scoped(
+          for {
+            port   <- Main.startServer
+            client <- ZIO.acquireRelease(ZIO.succeed(HttpClient.newHttpClient().nn))(client => ZIO.succeed(client.shutdownNow()))
+          } yield Server(port, client)
+        ) ++ ZLayer.environment[AuthServer[User, UserId, ConnectionId]]
+      )
+    }
+
+  override def spec: Spec[TestEnvironment & Scope, Any] =
+    suite("Authentication")(
+      test("the client can read where the login endpoints are") {
+        ZIO
+          .serviceWithZIO[Server](_.get("/api/clientAuthConfig"))
+          .map(response => assertTrue(response.status == 200, response.body.contains("loginUrl")))
+      },
+      test("a registered user logs in and is told who they are") {
+        for {
+          server   <- ZIO.service[Server]
+          user     <- register("logs-in@example.com")
+          loggedIn <- server.post("/login", s"""{"email": "${user.email}", "password": "$password"}""")
+          token    <- ZIO.fromOption(loggedIn.token).orElseFail(Exception(s"No bearer token in the login response: ${loggedIn.body}"))
+          whoAmI   <- server.get("/api/whoami", Some(token))
+        } yield assertTrue(
+          loggedIn.status == 200,
+          loggedIn.body.contains(user.email),
+          whoAmI.status == 200,
+          whoAmI.body.contains(user.email)
+        )
+      },
+      test("the wrong password and an unknown user are both refused, without saying which") {
+        for {
+          server  <- ZIO.service[Server]
+          user    <- register("wrong-password@example.com")
+          wrong   <- server.post("/login", s"""{"email": "${user.email}", "password": "not the password"}""")
+          unknown <- server.post("/login", s"""{"email": "nobody@example.com", "password": "$password"}""")
+        } yield assertTrue(wrong.status == 401, unknown.status == 401, wrong.body == unknown.body)
+      },
+      test("who you are is not told to an anonymous caller") {
+        ZIO.serviceWithZIO[Server](_.get("/api/whoami")).map(response => assertTrue(response.status == 401))
+      },
+      test("registering twice with the same email is a conflict") {
+        for {
+          server <- ZIO.service[Server]
+          user   <- register("taken@example.com")
+          again  <- server.post("/requestRegistration", s"""{"name": "Someone Else", "email": "${user.email}", "password": "$password"}""")
+        } yield assertTrue(again.status == 409)
+      },
+      test("a registration is accepted, and leaves the new user unable to log in until they confirm it") {
+        for {
+          server     <- ZIO.service[Server]
+          registered <- server.post("/requestRegistration", s"""{"name": "New User", "email": "new@example.com", "password": "$password"}""")
+          tooSoon    <- server.post("/login", s"""{"email": "new@example.com", "password": "$password"}""")
+        } yield assertTrue(registered.status == 204, tooSoon.status == 401)
+      },
+      test("the application's own routes still answer without a session") {
+        ZIO.serviceWithZIO[Server](_.get("/health")).map(response => assertTrue(response.status == 200, response.body == "ok"))
+      }
+    ).provideShared(server) @@ TestAspect.sequential @@ TestAspect.withLiveClock
+
+}

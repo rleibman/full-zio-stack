@@ -1,0 +1,18 @@
+package {{ base_package }}.db
+
+import {{ base_package }}.model.*
+import zio.*
+
+/** The repository over in-memory data: for tests, or for running without a database. */
+object MockRepository {
+
+  val live: ULayer[ZIORepository] = ZLayer {
+    for {
+      rows   <- Ref.make(Map.empty[ModelObjectId, ModelObject])
+      nextId <- Ref.make(1)
+    } yield new ZIORepository {
+      override val modelObjectOps: MockModelObjectOperations = MockModelObjectOperations(rows, nextId)
+    }
+  }
+
+}

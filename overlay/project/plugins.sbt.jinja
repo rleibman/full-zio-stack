@@ -1,0 +1,15 @@
+addSbtPlugin("com.github.sbt" % "sbt-header"    % "5.11.0")
+addSbtPlugin("com.eed3si9n"   % "sbt-buildinfo" % "0.13.1")
+addSbtPlugin("org.scalameta"  % "sbt-scalafmt"  % "2.6.2")
+{%- if packaging != 'none' %}
+addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.11.7")
+{%- endif %}
+{%- if components == 'full-stack' %}
+
+// Web client
+addSbtPlugin("org.scala-js"          % "sbt-scalajs"              % "1.22.0")
+addSbtPlugin("org.portable-scala"    % "sbt-scalajs-crossproject" % "1.4.0")
+addSbtPlugin("com.github.ghostdogpr" % "caliban-codegen-sbt"      % "3.1.5")
+// FileUtils, for the vite build in build.sbt.
+libraryDependencies += "commons-io" % "commons-io" % "2.20.0"
+{%- endif %}

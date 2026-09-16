@@ -1,0 +1,21 @@
+package {{ base_package }}.db
+
+import slick.jdbc.MySQLProfile
+
+import java.sql.Timestamp
+import java.time.Instant
+
+/** The Slick profile for this database, and the column mappings that depend on it. The only database-specific file of the Slick layer.
+  */
+object SlickProfile {
+
+  val profile: MySQLProfile.type = MySQLProfile
+
+  import profile.api.*
+
+  /** MySQL: `DATETIME(3)` columns, through java.sql.Timestamp like the other DB layers. Explicit because Slick's own Instant mapping differs per
+    * profile (MySQLProfile writes it as a VARCHAR). Import it by name: that shadows the profile's.
+    */
+  given instantColumnType: BaseColumnType[Instant] = MappedColumnType.base[Instant, Timestamp](Timestamp.from(_).nn, _.toInstant.nn)
+
+}

@@ -1,0 +1,18 @@
+package {{ base_package }}.repository
+
+import {{ base_package }}.model.*
+
+object Repository {
+
+  trait ModelObjectOperations[F[_]] extends CRUDOperations[F, ModelObject, ModelObjectId, ModelObjectSearch]
+
+}
+
+/** Every entity's operations, in effect `F`. The server implements it with ZIO over the database; the client implements it with `AsyncCallback` over
+  * the GraphQL API. Add one `...Ops` per entity.
+  */
+trait Repository[F[_]] {
+
+  def modelObjectOps: Repository.ModelObjectOperations[F]
+
+}

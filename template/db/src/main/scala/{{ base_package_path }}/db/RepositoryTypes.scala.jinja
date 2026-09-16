@@ -1,0 +1,35 @@
+package {{ base_package }}.db
+
+import {{ base_package }}.repository.{Repository, RepositoryError}
+import zio.*
+
+import java.sql.{SQLException, SQLRecoverableException, SQLTransientException}
+
+/** What every server-side repository operation returns: it either succeeds or fails with a [[RepositoryError]]. It never throws.
+  */
+type DataIO[A] = IO[RepositoryError, A]
+
+/** The repository, implemented with ZIO over the database. Each DB layer provides `ZIORepository.live`. */
+type ZIORepository = Repository[DataIO]
+
+object RepositoryErrors {
+
+  /** Classifies a failure from a database library. SQL states: class 08 is connection problems, class 23 is integrity constraint violations.
+    */
+  def fromThrowable(t: Throwable): RepositoryError = {
+    val message: String = Option(t.getMessage).getOrElse(t.getClass.getName)
+    t match {
+      case e: RepositoryError                                 => e
+      case _: SQLTransientException                           => RepositoryError.Transient(message, Some(t))
+      case _: SQLRecoverableException                         => RepositoryError.Transient(message, Some(t))
+      case e: SQLException if sqlStateClass(e).contains("08") => RepositoryError.Transient(message, Some(t))
+      case e: SQLException if sqlStateClass(e).contains("23") => RepositoryError.Conflict(message, Some(t))
+      // SQLite leaves the SQL state unset and says so only in the message ("[SQLITE_CONSTRAINT_UNIQUE] ...").
+      case _: SQLException if message.contains("SQLITE_CONSTRAINT") => RepositoryError.Conflict(message, Some(t))
+      case _ => RepositoryError.Unexpected(message, Some(t))
+    }
+  }
+
+  private def sqlStateClass(e: SQLException): Option[String] = Option(e.getSQLState).map(_.take(2))
+
+}

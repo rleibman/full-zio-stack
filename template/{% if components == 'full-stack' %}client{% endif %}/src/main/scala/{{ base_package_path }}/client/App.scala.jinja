@@ -1,0 +1,62 @@
+package {{ base_package }}.client
+
+import japgolly.scalajs.react.*
+import japgolly.scalajs.react.vdom.html_<^.*
+import {{ base_package }}.client.components.MuiExtensions.*
+import {{ base_package }}.client.pages.ModelObjectPage
+import {{ base_package }}.st.muiMaterial.components.{AppBar, Box, Container, CssBaseline, Tab, Tabs, ThemeProvider, Toolbar, Typography}
+import {{ base_package }}.st.muiMaterial.muiMaterialStrings as MuiStrings
+import {{ base_package }}.st.muiSystem.muiSystemStrings as SystemStrings
+
+import scala.scalajs.js
+
+/** The application shell: theme, a top bar with a tab per page, and the selected page. */
+object App {
+
+  /** The pages, in tab order. Add new pages here. */
+  private val pages: Seq[(String, () => VdomElement)] = Seq(
+    "Model objects" -> (() => ModelObjectPage())
+  )
+
+  private val component = ScalaFnComponent[Unit] { _ =>
+    for {
+      page    <- useState(0)
+      version <- useState("")
+      _       <- useEffectOnMount(
+        {{ class_prefix }}ClientRepository.version.flatMap(v => version.setState(v).asAsyncCallback).handleError(_ => AsyncCallback.unit).toCallback
+      )
+    } yield ThemeProvider(Theme.theme)(
+      CssBaseline(),
+      AppBar.position(MuiStrings.static)(
+        Toolbar()(
+          Typography.variant(MuiStrings.h6).sxStyle(js.Dynamic.literal(mr = 4))("{{ project_name }}"),
+          Tabs
+            .value(page.value)
+            .textColor(MuiStrings.inherit)
+            .indicatorColor(MuiStrings.secondary)
+            .sxStyle(js.Dynamic.literal(flexGrow = 1))
+            .onChange(
+              (
+                _,
+                selected
+              ) => page.setState(selected.asInstanceOf[Int])
+            )(
+              pages.map(
+                (
+                  label,
+                  _
+                ) => Tab().label(label).withKey(label).build
+              )*
+            ),
+          Typography.variant(MuiStrings.caption)(version.value)
+        )
+      ),
+      Container.maxWidth(SystemStrings.lg)(
+        Box().sxStyle(js.Dynamic.literal(py = 3))(pages(page.value)._2())
+      )
+    )
+  }
+
+  def apply(): VdomElement = component()
+
+}

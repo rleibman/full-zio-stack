@@ -1,0 +1,50 @@
+# Development database for {{ project_name }}. The credentials match server/src/main/resources/application.conf.
+services:
+  db:
+{%- if database == 'mariadb' %}
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: {{ db_name }}
+      MARIADB_USER: {{ db_user }}
+      MARIADB_PASSWORD: {{ db_user }}
+      MARIADB_ROOT_PASSWORD: {{ db_user }}-root
+    ports:
+      - "{{ db_port }}:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 20
+{%- elif database == 'mysql' %}
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: {{ db_name }}
+      MYSQL_USER: {{ db_user }}
+      MYSQL_PASSWORD: {{ db_user }}
+      MYSQL_ROOT_PASSWORD: {{ db_user }}-root
+    ports:
+      - "{{ db_port }}:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p{{ db_user }}-root"]
+      interval: 5s
+      retries: 20
+{%- elif database == 'postgres' %}
+    image: postgres:17
+    environment:
+      POSTGRES_DB: {{ db_name }}
+      POSTGRES_USER: {{ db_user }}
+      POSTGRES_PASSWORD: {{ db_user }}
+    ports:
+      - "{{ db_port }}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "{{ db_user }}", "-d", "{{ db_name }}"]
+      interval: 5s
+      retries: 20
+{%- endif %}
+volumes:
+  db-data:

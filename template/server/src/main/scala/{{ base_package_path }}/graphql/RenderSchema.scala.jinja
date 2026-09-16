@@ -1,0 +1,19 @@
+package {{ base_package }}.graphql
+
+import java.nio.file.{Files, Path}
+
+/** Writes the API's schema to the file given as the only argument. Run through the `calibanRender` sbt task. */
+object RenderSchema {
+
+  def main(args: Array[String]): Unit =
+    args.toList match {
+      case file :: Nil =>
+        val path = Path.of(file).nn
+        // A bare file name has no parent directory, and getParent is null for it.
+        Option(path.getParent).foreach(directory => Files.createDirectories(directory))
+        Files.writeString(path, ApiDefinition.api.render)
+        println(s"Wrote $path")
+      case _ => sys.error("Usage: RenderSchema <schema file>")
+    }
+
+}

@@ -1,0 +1,41 @@
+/*
+ * Copyright (c) 2024 Roberto Leibman
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+ * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+package net.leibman.fullziostack.client
+
+import japgolly.scalajs.react.ReactDOMClient
+import org.scalajs.dom
+
+object Main {
+
+  def main(args: Array[String]): Unit = {
+    // getElementById answers null when index.html has no such element, and React's own error for that ("Target
+    // container is not a DOM element") doesn't say which element is missing.
+    val container = Option(dom.document.getElementById("container"))
+      .getOrElse(sys.error("index.html has no element with id 'container', so the client has nowhere to render"))
+    // React 19 removed ReactDOM.render (renderIntoDOM); roots are created explicitly now.
+    // AuthGate renders the application as it is, unless the project was generated with authentication, in which case
+    // it asks whoever is at the browser to log in first.
+    ReactDOMClient.createRoot(container).render(AuthGate(App()))
+    ()
+  }
+
+}

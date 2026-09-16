@@ -1,0 +1,17 @@
+package {{ base_package }}.graphql
+
+import caliban.GraphQL
+import {{ base_package }}.config.AppConfig
+import zio.*
+
+/** What AI adds to the API: nothing, in a project generated without it. (See the ai-langchain4j variant.) */
+object AiModule {
+
+  /** Added to the API's environment. `Any` adds nothing. */
+  type Env = Any
+
+  def apis: List[GraphQL[Env]] = Nil
+
+  val layers: RLayer[AppConfig, Env] = ZLayer.empty
+
+}

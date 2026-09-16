@@ -1,0 +1,67 @@
+package {{ base_package }}.telemetry
+
+import caliban.CalibanError
+import caliban.wrappers.Wrapper.OverallWrapper
+import io.opentelemetry.api
+import io.opentelemetry.api.common.{AttributeKey, Attributes}
+import io.opentelemetry.exporter.otlp.http.trace.OtlpHttpSpanExporter
+import io.opentelemetry.sdk.OpenTelemetrySdk
+import io.opentelemetry.sdk.resources.Resource
+import io.opentelemetry.sdk.trace.SdkTracerProvider
+import io.opentelemetry.sdk.trace.`export`.BatchSpanProcessor
+import zio.*
+import zio.telemetry.opentelemetry.OpenTelemetry
+import zio.telemetry.opentelemetry.tracing.Tracing
+
+case class TelemetryConfig(
+  serviceName: String,
+  /** OTLP/HTTP endpoint of a collector, e.g. `http://localhost:4318`. Empty: tracing is a no-op. */
+  endpoint: Option[String] = None
+)
+
+/** OpenTelemetry tracing, through zio-telemetry. Spans are exported only when an endpoint is configured; otherwise
+  * everything below still runs, against a tracer that records nothing.
+  */
+object Telemetry {
+
+  val live: RLayer[TelemetryConfig, Tracing] =
+    ZLayer.service[TelemetryConfig].flatMap { config =>
+      val openTelemetry: TaskLayer[api.OpenTelemetry] = config.get.endpoint.filter(_.nonEmpty) match {
+        case None           => OpenTelemetry.noop
+        case Some(endpoint) => OpenTelemetry.custom(sdk(config.get.serviceName, endpoint))
+      }
+      openTelemetry ++ OpenTelemetry.contextZIO >>> OpenTelemetry.tracing(config.get.serviceName)
+    }
+
+  private def sdk(
+    serviceName: String,
+    endpoint:    String
+  ): ZIO[Scope, Throwable, api.OpenTelemetry] =
+    ZIO.fromAutoCloseable(ZIO.attempt {
+      val exporter: OtlpHttpSpanExporter =
+        OtlpHttpSpanExporter.builder().nn.setEndpoint(s"${endpoint.stripSuffix("/")}/v1/traces").nn.build().nn
+      val attributes: Attributes = Attributes.of(AttributeKey.stringKey("service.name"), serviceName).nn
+      val resource: Resource = Resource.getDefault.nn.merge(Resource.create(attributes)).nn
+      val tracerProvider: SdkTracerProvider =
+        SdkTracerProvider
+          .builder().nn
+          .addSpanProcessor(BatchSpanProcessor.builder(exporter).nn.build()).nn
+          .setResource(resource).nn
+          .build().nn
+      OpenTelemetrySdk.builder().nn.setTracerProvider(tracerProvider).nn.build().nn
+    })
+
+  /** A span around each GraphQL operation, named after it. */
+  val graphqlSpans: OverallWrapper[Tracing] = new OverallWrapper[Tracing] {
+
+    override def wrap[R <: Tracing](
+      process: caliban.GraphQLRequest => ZIO[R, Nothing, caliban.GraphQLResponse[CalibanError]]
+    ): caliban.GraphQLRequest => ZIO[R, Nothing, caliban.GraphQLResponse[CalibanError]] =
+      request =>
+        ZIO.serviceWithZIO[Tracing](tracing =>
+          tracing.span(s"graphql ${request.operationName.getOrElse("operation")}")(process(request))
+        )
+
+  }
+
+}

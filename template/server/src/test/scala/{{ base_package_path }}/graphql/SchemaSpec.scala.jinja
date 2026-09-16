@@ -1,0 +1,19 @@
+package {{ base_package }}.graphql
+
+import zio.*
+import zio.test.*
+
+import java.nio.file.{Files, Path}
+
+/** The client's GraphQL code is generated from the committed schema.graphql, so it must match the API. */
+object SchemaSpec extends ZIOSpecDefault {
+
+  override def spec: Spec[TestEnvironment & Scope, Any] =
+    test("the committed schema.graphql matches the API (if not, run the calibanRender sbt task)") {
+      for {
+        file      <- ZIO.succeed(Option(java.lang.System.getProperty("schema.file"))).someOrFailException
+        committed <- ZIO.attemptBlocking(Files.readString(Path.of(file)))
+      } yield assertTrue(committed == ApiDefinition.api.render)
+    }
+
+}

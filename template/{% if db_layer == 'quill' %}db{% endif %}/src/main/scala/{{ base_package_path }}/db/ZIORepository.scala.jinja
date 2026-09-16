@@ -1,0 +1,18 @@
+package {{ base_package }}.db
+
+import zio.*
+
+import javax.sql.DataSource
+
+/** The repository, implemented with Quill. Every DB layer has an object with this name and signature, so the rest of the app doesn't depend on which
+  * one is used. Add each new entity's operations here.
+  */
+object ZIORepository {
+
+  val live: URLayer[DataSource, ZIORepository] = ZLayer.fromFunction((dataSource: DataSource) =>
+    new ZIORepository {
+      override val modelObjectOps: QuillModelObjectOperations = QuillModelObjectOperations(dataSource)
+    }
+  )
+
+}

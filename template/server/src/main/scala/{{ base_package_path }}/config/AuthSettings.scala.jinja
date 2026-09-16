@@ -1,0 +1,22 @@
+package {{ base_package }}.config
+
+/** Only used by projects generated with authentication; harmless otherwise.
+  *
+  * @param secret
+  *   signs the session tokens. Anyone who knows it can mint a session for any user, so it belongs in the environment
+  *   (`AUTH_SECRET`), not in a file, and changing it logs everyone out.
+  * @param webHostUrl
+  *   where the client is reachable, used to build the links in registration and password-recovery emails.
+  * @param sessionMinutes
+  *   how long an access token is good for; the client refreshes it with the longer-lived refresh cookie.
+  * @param secureCookie
+  *   whether the refresh cookie is HTTPS-only. Production should leave it true; it has to be false to log in over
+  *   plain http, which is why development sets it so.
+  */
+case class AuthSettings(
+  secret:         String = "",
+  webHostUrl:     String = "http://localhost:8080",
+  sessionMinutes: Int = 60,
+  refreshMinutes: Int = 1440,
+  secureCookie:   Boolean = true
+)

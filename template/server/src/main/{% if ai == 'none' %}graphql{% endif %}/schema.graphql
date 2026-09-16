@@ -1,0 +1,64 @@
+schema {
+  query: Queries
+  mutation: Mutations
+}
+
+"An instantaneous point on the time-line represented by a standard date time string"
+scalar Instant
+
+scalar Long
+
+enum ModelObjectType {
+  type1
+  type2
+  type3
+}
+
+input ModelObjectInput {
+  id: Int!
+  name: String!
+  description: String!
+  modelObjectType: ModelObjectType!
+  deleted: Boolean!
+  created: Instant!
+  lastUpdated: Instant!
+}
+
+input ModelObjectSearchInput {
+  text: String
+  modelObjectType: ModelObjectType
+  includeDeleted: Boolean!
+  offset: Int!
+  limit: Int!
+}
+
+type ModelObject {
+  id: Int!
+  name: String!
+  description: String!
+  modelObjectType: ModelObjectType!
+  deleted: Boolean!
+  created: Instant!
+  lastUpdated: Instant!
+}
+
+type Mutations {
+  "Creates the model object when its id is -1, otherwise updates it. Returns what was saved."
+  upsertModelObject(modelObject: ModelObjectInput!): ModelObject
+  "Soft delete marks the object as deleted; hard delete removes it. False if there was nothing to delete."
+  deleteModelObject(id: Int!, softDelete: Boolean!): Boolean
+}
+
+type PageModelObject {
+  items: [ModelObject!]!
+  total: Long!
+}
+
+type Queries {
+  "Model objects matching the search, one page at a time"
+  modelObjects(search: ModelObjectSearchInput!): PageModelObject
+  "A model object by id, including soft-deleted ones"
+  modelObject(id: Int!): ModelObject
+  "The server's version"
+  version: String!
+}

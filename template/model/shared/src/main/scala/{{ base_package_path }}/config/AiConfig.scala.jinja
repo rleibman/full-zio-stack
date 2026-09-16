@@ -1,0 +1,21 @@
+package {{ base_package }}.config
+
+/** How to reach a large language model. Lives in the shared model so both the server's configuration and the `ai`
+  * module can use it.
+  *
+  * @param provider
+  *   `anthropic`, `openai`, `ollama`, or `none` (the default: AI features report that they aren't configured)
+  * @param model
+  *   the model id, e.g. `claude-sonnet-5`, `gpt-4o-mini`, `llama3.2`
+  * @param apiKey
+  *   the provider's API key; keep it out of the file and set AI_API_KEY instead
+  * @param baseUrl
+  *   overrides the provider's endpoint (Ollama's, say, or a proxy)
+  */
+case class AiConfig(
+  provider:       String = "none",
+  model:          String = "",
+  apiKey:         Option[String] = None,
+  baseUrl:        Option[String] = None,
+  timeoutSeconds: Int = 60
+)

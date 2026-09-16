@@ -1,0 +1,32 @@
+package {{ base_package }}.db
+
+import zio.*
+
+import java.nio.file.{Files, Path}
+import javax.sql.DataSource
+
+/** A throwaway SQLite database in a temporary directory, with the migrations applied. A file rather than `:memory:`, because every connection to
+  * `:memory:` gets its own empty database.
+  */
+object TestDatabase {
+
+  val config: TaskLayer[DatabaseConfig] = ZLayer.scoped {
+    ZIO
+      .acquireRelease(ZIO.attemptBlocking[Path](Files.createTempDirectory("sqlite-test").nn))(directory =>
+        ZIO
+          .attemptBlocking(Files.list(directory).nn.forEach(file => Files.delete(file)): Unit).zipRight(
+            ZIO.attemptBlocking(Files.delete(directory))
+          ).orDie
+      )
+      .map(directory =>
+        DatabaseConfig(
+          url = s"jdbc:sqlite:${directory.resolve("test.db")}?journal_mode=WAL&busy_timeout=5000",
+          migrationsLocation = "classpath:db/migration/sqlite",
+          maximumPoolSize = 1
+        )
+      )
+  }
+
+  val dataSource: TaskLayer[DataSource] = config >>> DataSources.live
+
+}
